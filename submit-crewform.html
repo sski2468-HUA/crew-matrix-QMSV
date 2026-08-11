@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>船員資歷填單 — FPMC</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 :root{
   --navy:#1c3a5e; --navy-2:#234a72; --navy-3:#2f6690;
@@ -43,6 +44,15 @@ input:focus,select:focus{outline:2px solid var(--navy-3);outline-offset:1px}
 #toast.err{background:var(--bad)}
 #successView{display:none;text-align:center;padding:60px 20px}
 #successView .icon{font-size:52px;margin-bottom:14px}
+#confirmOverlay{display:none;position:fixed;inset:0;background:rgba(17,28,40,.55);z-index:200;overflow:auto;padding:20px 0}
+#confirmOverlay .sheet{background:#fff;border-radius:12px;max-width:600px;margin:0 auto 30px;padding:18px}
+#confirmOverlay h2{margin:0 0 4px;font-size:17px}
+#confirmOverlay .warn{background:#fdf1e4;border:1px solid #f3d3ab;color:var(--signal-d);border-radius:8px;padding:10px 12px;font-size:12.5px;margin:10px 0 14px;line-height:1.7}
+.confirm-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;font-size:13px;margin-bottom:14px}
+.confirm-grid div b{display:block;color:var(--ink-3);font-size:10.5px;font-weight:600}
+.confirm-voy{border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:8px;font-size:12.5px;line-height:1.8}
+.confirm-actions{display:flex;gap:8px;margin-top:16px}
+.confirm-actions .btn{flex:1}
 </style>
 </head>
 <body>
@@ -89,8 +99,21 @@ input:focus,select:focus{outline:2px solid var(--navy-3);outline-offset:1px}
   <div id="successView">
     <div class="icon">✅</div>
     <h2>已送出，謝謝您！</h2>
-    <p class="hint">您的資料已送交審核，確認無誤後會正式匯入系統。</p>
+    <p class="hint">您的資料已送交審核，確認無誤後會正式匯入系統。已自動幫您下載一份 Excel 備份，請自行保存。</p>
     <button class="btn ghost" onclick="location.reload()">再填一筆</button>
+  </div>
+</div>
+
+<div id="confirmOverlay">
+  <div class="sheet">
+    <h2>請核對填寫內容</h2>
+    <p class="hint">送出後如需修改要另外聯絡海技組，請仔細確認以下內容是否正確。</p>
+    <div class="warn">⚠ 確認送出後會同時自動下載一份 Excel 備份檔，建議自行保存一份。</div>
+    <div id="confirmBody"></div>
+    <div class="confirm-actions">
+      <button class="btn ghost block" id="btnConfirmBack" type="button">← 返回修改</button>
+      <button class="btn primary" id="btnConfirmSend" type="button">✓ 確認無誤，送出</button>
+    </div>
   </div>
 </div>
 
@@ -141,11 +164,9 @@ function notify(msg, tone="ok"){
 }
 function val(id){ return document.getElementById(id).value.trim(); }
 
-document.getElementById("btnSubmit").addEventListener("click", async ()=>{
-  const name=val("f-name");
-  if(!name){ notify("請填寫姓名","err"); return; }
+function collectFormData(){
   const person={
-    name, name_en: val("f-name_en"), manning_agency: val("f-manning"),
+    name: val("f-name"), name_en: val("f-name_en"), manning_agency: val("f-manning"),
     rank_now: val("f-rank"), nationality: val("f-nat"), join_date: val("f-join")||null,
     coc: val("f-coc"), issuing_country: val("f-issuing"), tanker_cert: val("f-tanker"),
     stcw: val("f-stcw"), radio: val("f-radio"), english: val("f-english"),
@@ -161,7 +182,57 @@ document.getElementById("btnSubmit").addEventListener("click", async ()=>{
     const cargo_types=[...box.querySelectorAll(".v-type:checked")].map(c=>c.value);
     voyages.push({rank, ship_name, sign_on, sign_off, cargo_types, note:""});
   });
-  const btn=document.getElementById("btnSubmit");
+  return {person, voyages};
+}
+
+function escHtml(s){ return String(s??"").replace(/[&<>"']/g, c=> ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+function renderConfirmBody(person, voyages){
+  const fields=[["姓名",person.name],["英文姓名",person.name_en],["勞務公司",person.manning_agency],["現職",person.rank_now],
+    ["國籍",person.nationality],["進公司日",person.join_date],["證書種類",person.coc],["發證國",person.issuing_country],
+    ["Tanker 證書",person.tanker_cert],["STCW V",person.stcw],["電台證書",person.radio],["英語能力",person.english]];
+  const fieldsHtml = fields.map(([k,v])=>`<div><b>${escHtml(k)}</b>${escHtml(v||"（未填）")}</div>`).join("");
+  const voyHtml = voyages.length
+    ? voyages.map((v,i)=>`<div class="confirm-voy"><b>#${i+1}　${escHtml(RANK_CN[v.rank]||v.rank)}</b>　${escHtml(v.ship_name)}<br>${escHtml(v.sign_on)} ～ ${v.sign_off? escHtml(v.sign_off) : "（在船中）"}　船型：${v.cargo_types.length? v.cargo_types.map(t=>TYPE_CN[t]).join("+") : "（未選）"}</div>`).join("")
+    : `<p class="hint">目前沒有填寫任何航次資料。</p>`;
+  document.getElementById("confirmBody").innerHTML = `
+    <div class="confirm-grid">${fieldsHtml}</div>
+    <div style="font-size:13px;font-weight:700;margin:12px 0 8px">海上資歷（${voyages.length} 筆）</div>
+    ${voyHtml}
+  `;
+}
+
+function downloadBackupXlsx(person, voyages){
+  const info=[{
+    姓名:person.name, 英文姓名:person.name_en, 勞務公司:person.manning_agency, 現職:person.rank_now,
+    國籍:person.nationality, 進公司日:person.join_date, 證書種類:person.coc, 發證國:person.issuing_country,
+    Tanker證書:person.tanker_cert, STCWV:person.stcw, 電台證書:person.radio, 英語能力:person.english,
+  }];
+  const voy=voyages.map((v,i)=>({
+    項次:i+1, 職級:v.rank, 船名:v.ship_name, 上船日:v.sign_on, 下船日:v.sign_off||"(在船中)",
+    船型:v.cargo_types.map(t=>TYPE_CN[t]).join("+"),
+  }));
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(info), "基本資料");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(voy), "海上資歷");
+  const today=new Date().toISOString().slice(0,10).replaceAll("-","");
+  XLSX.writeFile(wb, `船員資歷填單備份_${person.name||"未填姓名"}_${today}.xlsx`);
+}
+
+document.getElementById("btnSubmit").addEventListener("click", ()=>{
+  const {person, voyages}=collectFormData();
+  if(!person.name){ notify("請填寫姓名","err"); return; }
+  renderConfirmBody(person, voyages);
+  document.getElementById("confirmOverlay").style.display="block";
+  window.scrollTo(0,0);
+});
+document.getElementById("btnConfirmBack").addEventListener("click", ()=>{
+  document.getElementById("confirmOverlay").style.display="none";
+});
+document.getElementById("btnConfirmSend").addEventListener("click", async ()=>{
+  const {person, voyages}=collectFormData();
+  if(!person.name){ notify("請填寫姓名","err"); document.getElementById("confirmOverlay").style.display="none"; return; }
+  const btn=document.getElementById("btnConfirmSend");
   btn.disabled=true; btn.textContent="送出中…";
   try{
     const res=await fetch(`${CLOUD.url}/rest/v1/crew_submissions`, {
@@ -170,14 +241,17 @@ document.getElementById("btnSubmit").addEventListener("click", async ()=>{
         "apikey":CLOUD.key, "Authorization":"Bearer "+CLOUD.key,
         "Content-Type":"application/json", "Prefer":"return=minimal"
       },
-      body: JSON.stringify([{payload:{person,voyages}, submitted_name:name, status:"pending"}])
+      body: JSON.stringify([{payload:{person,voyages}, submitted_name:person.name, status:"pending"}])
     });
     if(!res.ok){ const t=await res.text().catch(()=> ""); throw new Error(t.slice(0,200)); }
+    try{ downloadBackupXlsx(person, voyages); }catch(e){ console.warn("備份下載失敗", e); }
+    document.getElementById("confirmOverlay").style.display="none";
     document.getElementById("formView").style.display="none";
     document.getElementById("successView").style.display="block";
   }catch(e){
     notify("送出失敗："+e.message, "err");
-    btn.disabled=false; btn.textContent="✓ 送出填單";
+  }finally{
+    btn.disabled=false; btn.textContent="✓ 確認無誤，送出";
   }
 });
 </script>
