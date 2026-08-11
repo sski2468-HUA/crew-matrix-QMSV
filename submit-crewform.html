@@ -202,19 +202,38 @@ function renderConfirmBody(person, voyages){
   `;
 }
 
+/* 產生的格式跟主系統「拖曳匯入」認得的「海上資歷 Service experience」範本一模一樣
+   （儲存格位置對齊 index.html 的 parsePersonSheet()），所以這份備份檔案
+   之後也能直接拖進系統的匯入功能，不只是留底用。 */
 function downloadBackupXlsx(person, voyages){
-  const info=[{
-    姓名:person.name, 英文姓名:person.name_en, 勞務公司:person.manning_agency, 現職:person.rank_now,
-    國籍:person.nationality, 進公司日:person.join_date, 證書種類:person.coc, 發證國:person.issuing_country,
-    Tanker證書:person.tanker_cert, STCWV:person.stcw, 電台證書:person.radio, 英語能力:person.english,
-  }];
-  const voy=voyages.map((v,i)=>({
-    項次:i+1, 職級:v.rank, 船名:v.ship_name, 上船日:v.sign_on, 下船日:v.sign_off||"(在船中)",
-    船型:v.cargo_types.map(t=>TYPE_CN[t]).join("+"),
-  }));
+  const aoa=[];
+  const set=(r,c,v)=>{ while(aoa.length<r) aoa.push([]); while(aoa[r-1].length<c) aoa[r-1].push(""); aoa[r-1][c-1]=v; };
+  set(1,1,"海上資歷　(Service experience)");
+  set(2,1,"姓名："); set(2,4,person.name||""); set(2,5,"勞務公司："); set(2,6,person.manning_agency||""); set(2,7,"英語能力"); set(2,8,person.english||""); set(2,9,"進入公司日期："); set(2,11,person.join_date||"");
+  set(3,1,"Name:"); set(3,4,person.name_en||""); set(3,5,"Manning agency:"); set(3,7,"English proficiency"); set(3,9,"Company join date:");
+  set(4,1,"現職："); set(4,4,person.rank_now||""); set(4,5,"國籍"); set(4,6,person.nationality||""); set(4,9,"Tank船證書"); set(4,11,person.tanker_cert||"");
+  set(5,1,"Rank at present:"); set(5,5,"Nationality"); set(5,9,"Tanker certification");
+  set(6,1,"證書種類"); set(6,4,person.coc||""); set(6,5,"發證國"); set(6,6,person.issuing_country||""); set(6,7,"特別證書"); set(6,8,person.stcw||""); set(6,9,"電台證書"); set(6,11,person.radio||"");
+  set(7,1,"Certificate of Competency"); set(7,5,"Issuing Country"); set(7,7,"SQ for current cargo（Para 1 or 2）"); set(7,9,"Radio qualification");
+  set(9,1,"項次"); set(9,2,"職位"); set(9,4,"船名"); set(9,6,"上船日期"); set(9,7,"下船日期"); set(9,9,"船型 Vessel type（打 V）");
+  set(10,1,"No."); set(10,2,"Rank"); set(10,4,"Ship name"); set(10,6,"Date of Sign On"); set(10,7,"Date of Sign Off"); set(10,8,"Days");
+  set(10,9,"化"); set(10,10,"油/化"); set(10,11,"油"); set(10,12,"氣體"); set(10,13,"其他");
+  set(11,9,"Chem"); set(11,10,"Oil/Chem"); set(11,11,"Oil"); set(11,12,"Gas"); set(11,13,"Other");
+  voyages.forEach((v,i)=>{
+    const r=12+i;
+    set(r,1,i+1);
+    set(r,2,RANK_CN[v.rank]||"");
+    set(r,3,v.rank||"");
+    set(r,4,v.ship_name||"");
+    set(r,6,v.sign_on||"");
+    set(r,7,v.sign_off||"");
+    const colByType={Chem:9,"Oil/Chem":10,Oil:11,Gas:12,Other:13};
+    (v.cargo_types||[]).forEach(t=>{ if(colByType[t]) set(r,colByType[t],"V"); });
+  });
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  ws["!cols"]=[{wch:6},{wch:10},{wch:8},{wch:20},{wch:14},{wch:15},{wch:15},{wch:8},{wch:6},{wch:8},{wch:6},{wch:6},{wch:6}];
   const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(info), "基本資料");
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(voy), "海上資歷");
+  XLSX.utils.book_append_sheet(wb, ws, "個人資歷");
   const today=new Date().toISOString().slice(0,10).replaceAll("-","");
   XLSX.writeFile(wb, `船員資歷填單備份_${person.name||"未填姓名"}_${today}.xlsx`);
 }
