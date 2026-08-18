@@ -119,6 +119,8 @@ table.tbl tbody tr:hover>td{background:#f3f8fa}
 table.tbl th.sortable{cursor:pointer;user-select:none}
 table.tbl th.sortable:hover{background:var(--navy-2)}
 table.tbl th.sortable .sortarrow{margin-left:4px;font-size:10px;opacity:.6}
+a.linklike{color:var(--signal,#c2601a);text-decoration:none;font-weight:600}
+a.linklike:hover{text-decoration:underline}
 table.tbl th.sortable.sorted .sortarrow{opacity:1;color:var(--signal)}
 .flowchart{display:flex;flex-wrap:wrap;align-items:stretch;gap:0;margin:14px 0}
 .flowstep{background:var(--card);border:1.5px solid var(--navy-3);border-radius:8px;padding:12px 14px;font-size:12.5px;line-height:1.6;min-width:150px;max-width:190px;text-align:center;display:flex;flex-direction:column;justify-content:center}
@@ -241,7 +243,13 @@ table.matrix tr.yellow td{background:var(--yellow)}
           <div class="tblwrap">
             <table class="tbl" id="historyTable">
               <thead><tr>
-                <th>姓名</th><th>職級</th><th>船名</th><th>船型</th><th>上船日</th><th>已在船天數</th><th>勞務公司</th>
+                <th class="sortable" data-sort="name">姓名<span class="sortarrow"></span></th>
+                <th class="sortable" data-sort="rank">職級<span class="sortarrow"></span></th>
+                <th class="sortable" data-sort="ship">船名<span class="sortarrow"></span></th>
+                <th class="sortable" data-sort="cargo">船型<span class="sortarrow"></span></th>
+                <th class="sortable" data-sort="signon">上船日<span class="sortarrow"></span></th>
+                <th class="sortable" data-sort="days">已在船天數<span class="sortarrow"></span></th>
+                <th class="sortable" data-sort="manning">勞務公司<span class="sortarrow"></span></th>
               </tr></thead>
               <tbody id="historyBody"><tr><td colspan="7" class="hint" style="text-align:center;padding:20px">請選擇日期後按「查詢」</td></tr></tbody>
             </table>
@@ -1255,6 +1263,7 @@ document.getElementById("rosterSubSeg").addEventListener("click", e=>{
 });
 /* ── ④ 指定日期在船查詢：依上船日/下船日回溯，找出某一天實際在船的船員與船名 ── */
 let historySnapshot=[];
+let historySort={ col:null, dir:1 };
 function computeHistorySnapshot(dateISO){
   const rows=[];
   for(const p of State.persons.values()){
@@ -1267,19 +1276,45 @@ function computeHistorySnapshot(dateISO){
   rows.sort((a,b)=> (a.voyage.ship_name||"").localeCompare(b.voyage.ship_name||"") || (a.person.name||"").localeCompare(b.person.name||""));
   return rows;
 }
+function historySortKey(row, col, dateISO){
+  const {person:p, voyage:v}=row;
+  const ship=State.ships.find(s=>s.name===v.ship_name);
+  switch(col){
+    case "name": return p.name||"";
+    case "rank": return v.rank||"";
+    case "ship": return ship? shipLabel(ship) : (v.ship_name||"");
+    case "cargo": return (v.cargo_types||[]).join("+");
+    case "signon": return v.sign_on||"";
+    case "days": return dayDiff(v.sign_on, dateISO);
+    case "manning": return p.manning_agency||"";
+    default: return "";
+  }
+}
 function renderHistoryTable(){
   const body=document.getElementById("historyBody");
   const countEl=document.getElementById("historyCount");
   const dateISO=document.getElementById("historyDate").value;
   if(!dateISO){ body.innerHTML=`<tr><td colspan="7" class="hint" style="text-align:center;padding:20px">請選擇日期後按「查詢」</td></tr>`; countEl.textContent=""; document.getElementById("btnExportHistory").style.display="none"; return; }
   historySnapshot=computeHistorySnapshot(dateISO);
+  if(historySort.col){
+    const col=historySort.col, dir=historySort.dir;
+    historySnapshot.sort((a,b)=>{
+      const av=historySortKey(a,col,dateISO), bv=historySortKey(b,col,dateISO);
+      if(typeof av==="number" && typeof bv==="number") return (av-bv)*dir;
+      return String(av).localeCompare(String(bv),"zh-Hant")*dir;
+    });
+  }
+  document.querySelectorAll("#historyTable th.sortable").forEach(th=>{
+    th.classList.toggle("sorted", th.dataset.sort===historySort.col);
+    th.querySelector(".sortarrow").textContent = th.dataset.sort===historySort.col ? (historySort.dir===1?"▲":"▼") : "";
+  });
   countEl.textContent = `${disp(dateISO)} 當天在船：共 ${historySnapshot.length} 人`;
   document.getElementById("btnExportHistory").style.display = historySnapshot.length? "" : "none";
   body.innerHTML = historySnapshot.length ? historySnapshot.map(({person:p, voyage:v})=>{
     const ship=State.ships.find(s=>s.name===v.ship_name);
     const days=dayDiff(v.sign_on, dateISO);
     return `<tr>
-      <td>${esc(p.name)}</td>
+      <td><a href="#" class="linklike" onclick="goToPersonEdit('${p.id}');return false;">${esc(p.name)}</a></td>
       <td>${esc(v.rank||"")} ${esc(RANK_CN[v.rank]||"")}</td>
       <td>${esc(ship? shipLabel(ship) : (v.ship_name||""))}</td>
       <td>${esc((v.cargo_types||[]).join("+"))}</td>
@@ -1289,6 +1324,13 @@ function renderHistoryTable(){
     </tr>`;
   }).join("") : `<tr><td colspan="7" class="hint" style="text-align:center;padding:20px">${disp(dateISO)} 當天沒有任何在船紀錄</td></tr>`;
 }
+document.getElementById("historyTable").querySelector("thead").addEventListener("click", e=>{
+  const th=e.target.closest("th.sortable"); if(!th) return;
+  const col=th.dataset.sort;
+  if(historySort.col===col) historySort.dir*=-1;
+  else { historySort.col=col; historySort.dir=1; }
+  renderHistoryTable();
+});
 document.getElementById("btnRunHistory").addEventListener("click", renderHistoryTable);
 document.getElementById("historyDate").addEventListener("keydown", e=>{ if(e.key==="Enter") renderHistoryTable(); });
 document.getElementById("btnExportHistory").addEventListener("click", ()=>{
