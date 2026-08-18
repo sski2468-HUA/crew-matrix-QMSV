@@ -227,6 +227,25 @@ table.matrix tr.yellow td{background:var(--yellow)}
           <button type="button" class="on" data-v="list">① 船員個人資料</button>
           <button type="button" data-v="upload">② 新增人員</button>
           <button type="button" data-v="submissions">③ 資料審核入庫<span class="tag red" id="submissionBadge" style="display:none;margin-left:6px"></span></button>
+          <button type="button" data-v="history">④ 指定日期在船查詢</button>
+        </div>
+
+        <div id="rosterSubHistory" hidden>
+          <p class="hint" style="margin:0 0 10px">查詢「某一天」實際在船的船員名單與所在船舶（依每位船員的上船日／下船日回溯判斷，下船日空白代表當時仍在船上）。</p>
+          <div class="panelbox" style="display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap;margin-bottom:14px">
+            <label class="field">查詢日期<input type="date" id="historyDate"></label>
+            <button class="btn primary" id="btnRunHistory">🔍 查詢</button>
+            <button class="btn sm" id="btnExportHistory" style="display:none">⬇ 匯出 Excel</button>
+            <span class="hint" id="historyCount" style="margin-left:auto"></span>
+          </div>
+          <div class="tblwrap">
+            <table class="tbl" id="historyTable">
+              <thead><tr>
+                <th>姓名</th><th>職級</th><th>船名</th><th>船型</th><th>上船日</th><th>已在船天數</th><th>勞務公司</th>
+              </tr></thead>
+              <tbody id="historyBody"><tr><td colspan="7" class="hint" style="text-align:center;padding:20px">請選擇日期後按「查詢」</td></tr></tbody>
+            </table>
+          </div>
         </div>
 
         <div id="rosterSubSubmissions" hidden>
@@ -1228,7 +1247,65 @@ document.getElementById("rosterSubSeg").addEventListener("click", e=>{
   document.getElementById("rosterSubList").hidden = btn.dataset.v!=="list";
   document.getElementById("rosterSubUpload").hidden = btn.dataset.v!=="upload";
   document.getElementById("rosterSubSubmissions").hidden = btn.dataset.v!=="submissions";
+  document.getElementById("rosterSubHistory").hidden = btn.dataset.v!=="history";
+  if(btn.dataset.v==="history" && !document.getElementById("historyDate").value){
+    document.getElementById("historyDate").value = todayISO();
+  }
   if(btn.dataset.v==="submissions") renderSubmissionTable();
+});
+/* ── ④ 指定日期在船查詢：依上船日/下船日回溯，找出某一天實際在船的船員與船名 ── */
+let historySnapshot=[];
+function computeHistorySnapshot(dateISO){
+  const rows=[];
+  for(const p of State.persons.values()){
+    for(const v of p.voyages){
+      if(!v.sign_on || v.sign_on>dateISO) continue; // 尚未上船
+      if(v.sign_off && v.sign_off<dateISO) continue; // 已經下船
+      rows.push({person:p, voyage:v});
+    }
+  }
+  rows.sort((a,b)=> (a.voyage.ship_name||"").localeCompare(b.voyage.ship_name||"") || (a.person.name||"").localeCompare(b.person.name||""));
+  return rows;
+}
+function renderHistoryTable(){
+  const body=document.getElementById("historyBody");
+  const countEl=document.getElementById("historyCount");
+  const dateISO=document.getElementById("historyDate").value;
+  if(!dateISO){ body.innerHTML=`<tr><td colspan="7" class="hint" style="text-align:center;padding:20px">請選擇日期後按「查詢」</td></tr>`; countEl.textContent=""; document.getElementById("btnExportHistory").style.display="none"; return; }
+  historySnapshot=computeHistorySnapshot(dateISO);
+  countEl.textContent = `${disp(dateISO)} 當天在船：共 ${historySnapshot.length} 人`;
+  document.getElementById("btnExportHistory").style.display = historySnapshot.length? "" : "none";
+  body.innerHTML = historySnapshot.length ? historySnapshot.map(({person:p, voyage:v})=>{
+    const ship=State.ships.find(s=>s.name===v.ship_name);
+    const days=dayDiff(v.sign_on, dateISO);
+    return `<tr>
+      <td>${esc(p.name)}</td>
+      <td>${esc(v.rank||"")} ${esc(RANK_CN[v.rank]||"")}</td>
+      <td>${esc(ship? shipLabel(ship) : (v.ship_name||""))}</td>
+      <td>${esc((v.cargo_types||[]).join("+"))}</td>
+      <td class="mono">${disp(v.sign_on)}</td>
+      <td class="mono">${days}</td>
+      <td>${esc(p.manning_agency||"")}</td>
+    </tr>`;
+  }).join("") : `<tr><td colspan="7" class="hint" style="text-align:center;padding:20px">${disp(dateISO)} 當天沒有任何在船紀錄</td></tr>`;
+}
+document.getElementById("btnRunHistory").addEventListener("click", renderHistoryTable);
+document.getElementById("historyDate").addEventListener("keydown", e=>{ if(e.key==="Enter") renderHistoryTable(); });
+document.getElementById("btnExportHistory").addEventListener("click", ()=>{
+  const dateISO=document.getElementById("historyDate").value;
+  if(!dateISO || !historySnapshot.length) return;
+  const aoa=[[`Crew Matrix — ${disp(dateISO)} 在船名單`],[],
+    ["姓名","職級","職級(中)","船名","船型","上船日","已在船天數","勞務公司"]];
+  for(const {person:p, voyage:v} of historySnapshot){
+    const ship=State.ships.find(s=>s.name===v.ship_name);
+    aoa.push([p.name, v.rank||"", RANK_CN[v.rank]||"", ship? shipLabel(ship):(v.ship_name||""), (v.cargo_types||[]).join("+"), disp(v.sign_on), dayDiff(v.sign_on,dateISO), p.manning_agency||""]);
+  }
+  const wb=XLSX.utils.book_new();
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  ws["!cols"]=[{wch:12},{wch:8},{wch:8},{wch:16},{wch:12},{wch:12},{wch:10},{wch:14}];
+  XLSX.utils.book_append_sheet(wb, ws, "在船名單");
+  XLSX.writeFile(wb, `在船名單_${dateISO.replaceAll("-","")}.xlsx`);
+  logAction("匯出指定日期在船名單", `${disp(dateISO)}，共 ${historySnapshot.length} 人`);
 });
 document.getElementById("rosterStatusSeg").addEventListener("click", e=>{
   const btn=e.target.closest("button"); if(!btn) return;
