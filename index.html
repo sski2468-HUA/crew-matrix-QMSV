@@ -97,6 +97,13 @@ table.tbl tbody tr:hover>td{background:#f3f8fa}
 .segbtn button.on{background:var(--navy);color:#fff;font-weight:700}
 .segbtn button:hover:not(.on){background:#f3f8fa}
 .combo-drop{position:absolute;z-index:30;top:100%;left:0;right:0;background:#fff;border:1px solid var(--line-2);border-radius:4px;box-shadow:0 6px 18px rgba(0,0,0,.15);max-height:200px;overflow-y:auto;margin-top:2px}
+.ms-drop{position:absolute;z-index:30;top:100%;left:0;background:#fff;border:1px solid var(--line-2);border-radius:6px;box-shadow:0 8px 22px rgba(0,0,0,.18);margin-top:4px;min-width:190px;max-height:260px;overflow-y:auto;padding:6px}
+.ms-drop .ms-actions{display:flex;gap:6px;padding:2px 4px 8px;border-bottom:1px solid var(--line);margin-bottom:6px}
+.ms-drop .ms-actions a{font-size:11.5px;color:var(--signal);cursor:pointer;text-decoration:none}
+.ms-drop .ms-actions a:hover{text-decoration:underline}
+.ms-drop label{display:flex;align-items:center;gap:7px;padding:5px 6px;font-size:12.5px;cursor:pointer;border-radius:4px}
+.ms-drop label:hover{background:#f3f6f7}
+.msbtn{white-space:nowrap}
 .combo-item{padding:7px 10px;font-size:12.5px;cursor:pointer}
 .combo-item:hover,.combo-item.hi{background:var(--navy);color:#fff}
 .combo-item.empty{color:var(--ink-3);font-style:italic}
@@ -236,6 +243,16 @@ table.matrix tr.yellow td{background:var(--yellow)}
           <p class="hint" style="margin:0 0 10px">查詢「某一天」實際在船的船員名單與所在船舶（依每位船員的上船日／下船日回溯判斷，下船日空白代表當時仍在船上）。</p>
           <div class="panelbox" style="display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap;margin-bottom:14px">
             <label class="field">查詢日期<input type="date" id="historyDate"></label>
+            <div class="field" style="position:relative">
+              <span>職級</span>
+              <button type="button" class="btn sm msbtn" id="historyRankBtn">全部職級 ▾</button>
+              <div class="ms-drop" id="historyRankDrop" style="display:none"></div>
+            </div>
+            <div class="field" style="position:relative">
+              <span>船名</span>
+              <button type="button" class="btn sm msbtn" id="historyShipBtn">全部船名 ▾</button>
+              <div class="ms-drop" id="historyShipDrop" style="display:none"></div>
+            </div>
             <button class="btn primary" id="btnRunHistory">🔍 查詢</button>
             <button class="btn sm" id="btnExportHistory" style="display:none">⬇ 匯出 Excel</button>
             <span class="hint" id="historyCount" style="margin-left:auto"></span>
@@ -1259,17 +1276,90 @@ document.getElementById("rosterSubSeg").addEventListener("click", e=>{
   if(btn.dataset.v==="history" && !document.getElementById("historyDate").value){
     document.getElementById("historyDate").value = todayISO();
   }
+  if(btn.dataset.v==="history") initHistoryFilters();
   if(btn.dataset.v==="submissions") renderSubmissionTable();
 });
 /* ── ④ 指定日期在船查詢：依上船日/下船日回溯，找出某一天實際在船的船員與船名 ── */
 let historySnapshot=[];
 let historySort={ col:null, dir:1 };
+let historyFilter={ ranks:new Set(), ships:new Set() };
+function historyAllOptions(){
+  const ranks=new Map(); // rank code -> label
+  const ships=new Set();
+  for(const p of State.persons.values()){
+    for(const v of p.voyages){
+      if(v.rank) ranks.set(v.rank, `${v.rank}${RANK_CN[v.rank]?" "+RANK_CN[v.rank]:""}`);
+      if(v.ship_name) ships.add(v.ship_name);
+    }
+  }
+  const rankOrder=["CAPT.","C/O","2/O","3/O","C/E","2/E","3/E","4/E","Cadet"];
+  const rankList=[...ranks.keys()].sort((a,b)=> rankOrder.indexOf(a)-rankOrder.indexOf(b)).map(k=>({value:k,label:ranks.get(k)}));
+  const shipList=[...ships].sort((a,b)=>a.localeCompare(b,"zh-Hant")).map(s=>({value:s,label:s}));
+  return {rankList, shipList};
+}
+function renderMsDrop(dropId, options, selectedSet, btnId, btnAllLabel){
+  const drop=document.getElementById(dropId);
+  drop.innerHTML = `
+    <div class="ms-actions"><a data-act="all">全選</a><a data-act="none">清除</a></div>
+    ${options.map(o=>`<label><input type="checkbox" value="${esc(o.value)}" ${selectedSet.has(o.value)?"checked":""}>${esc(o.label)}</label>`).join("") || `<div class="hint" style="padding:6px">（無資料）</div>`}
+  `;
+  drop.querySelectorAll('input[type="checkbox"]').forEach(cb=>{
+    cb.addEventListener("change", ()=>{
+      if(cb.checked) selectedSet.add(cb.value); else selectedSet.delete(cb.value);
+      updateMsBtnLabel(btnId, options.length, selectedSet, btnAllLabel);
+      renderHistoryTable();
+    });
+  });
+  drop.querySelector('[data-act="all"]').addEventListener("click", ()=>{
+    options.forEach(o=>selectedSet.add(o.value));
+    renderMsDrop(dropId, options, selectedSet, btnId, btnAllLabel);
+    updateMsBtnLabel(btnId, options.length, selectedSet, btnAllLabel);
+    renderHistoryTable();
+  });
+  drop.querySelector('[data-act="none"]').addEventListener("click", ()=>{
+    selectedSet.clear();
+    renderMsDrop(dropId, options, selectedSet, btnId, btnAllLabel);
+    updateMsBtnLabel(btnId, options.length, selectedSet, btnAllLabel);
+    renderHistoryTable();
+  });
+}
+function updateMsBtnLabel(btnId, total, selectedSet, allLabel){
+  const btn=document.getElementById(btnId);
+  btn.textContent = selectedSet.size===0 ? `${allLabel} ▾` : `${allLabel.replace("全部","")}已選 ${selectedSet.size} ▾`;
+}
+function initHistoryFilters(){
+  const {rankList, shipList} = historyAllOptions();
+  renderMsDrop("historyRankDrop", rankList, historyFilter.ranks, "historyRankBtn", "全部職級");
+  renderMsDrop("historyShipDrop", shipList, historyFilter.ships, "historyShipBtn", "全部船名");
+  updateMsBtnLabel("historyRankBtn", rankList.length, historyFilter.ranks, "全部職級");
+  updateMsBtnLabel("historyShipBtn", shipList.length, historyFilter.ships, "全部船名");
+}
+document.getElementById("historyRankBtn").addEventListener("click", e=>{
+  e.stopPropagation();
+  document.getElementById("historyShipDrop").style.display="none";
+  const d=document.getElementById("historyRankDrop");
+  d.style.display = d.style.display==="none" ? "" : "none";
+});
+document.getElementById("historyShipBtn").addEventListener("click", e=>{
+  e.stopPropagation();
+  document.getElementById("historyRankDrop").style.display="none";
+  const d=document.getElementById("historyShipDrop");
+  d.style.display = d.style.display==="none" ? "" : "none";
+});
+document.addEventListener("click", e=>{
+  if(!e.target.closest(".ms-drop") && !e.target.closest(".msbtn")){
+    document.getElementById("historyRankDrop").style.display="none";
+    document.getElementById("historyShipDrop").style.display="none";
+  }
+});
 function computeHistorySnapshot(dateISO){
   const rows=[];
   for(const p of State.persons.values()){
     for(const v of p.voyages){
       if(!v.sign_on || v.sign_on>dateISO) continue; // 尚未上船
       if(v.sign_off && v.sign_off<dateISO) continue; // 已經下船
+      if(historyFilter.ranks.size && !historyFilter.ranks.has(v.rank)) continue;
+      if(historyFilter.ships.size && !historyFilter.ships.has(v.ship_name)) continue;
       rows.push({person:p, voyage:v});
     }
   }
