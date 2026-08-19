@@ -360,6 +360,7 @@ table.matrix tr.yellow td{background:var(--yellow)}
       </div>
 
       <div id="rosterEditView" hidden></div>
+      <datalist id="fleetShipsList"></datalist>
     </section>
 
     <!-- ═══════ Tab：Crew Matrix（含異動作業）═══════ -->
@@ -763,6 +764,10 @@ function shipLabel(ship){
   if(SHIP_DISPLAY_MODE==="name_en") return ship.name_en || ship.name;
   return ship.name;
 }
+function shipLabelEn(ship){
+  if(!ship) return "";
+  return ship.name_en || ship.name;
+}
 async function changeRuntimePassword(){
   const master=prompt("修改異動密碼需要先輸入管理密碼：");
   if(master===null) return;
@@ -877,7 +882,7 @@ function normKey(s){ return String(s||"").trim().toUpperCase().replace(/\s+/g," 
 function normalizeShipName(raw){
   if(!raw) return raw;
   const k=normKey(raw);
-  const known=State.ships.find(s=>normKey(s.name)===k);
+  const known=State.ships.find(s=> normKey(s.name)===k || (s.name_en && normKey(s.name_en)===k));
   return known ? known.name : raw;
 }
 
@@ -1294,7 +1299,10 @@ function historyAllOptions(){
   }
   const rankOrder=["CAPT.","C/O","2/O","3/O","C/E","2/E","3/E","4/E","Cadet"];
   const rankList=[...ranks.keys()].sort((a,b)=> rankOrder.indexOf(a)-rankOrder.indexOf(b)).map(k=>({value:k,label:ranks.get(k)}));
-  const shipList=[...ships].sort((a,b)=>a.localeCompare(b,"zh-Hant")).map(s=>({value:s,label:s}));
+  const shipList=[...ships].map(s=>{
+    const known=State.ships.find(sh=>sh.name===s);
+    return {value:s, label: known? (known.name_en||known.name) : s};
+  }).sort((a,b)=>a.label.localeCompare(b.label));
   return {rankList, shipList};
 }
 function renderMsDrop(dropId, options, selectedSet, btnId, btnAllLabel){
@@ -1372,7 +1380,7 @@ function historySortKey(row, col, dateISO){
   switch(col){
     case "name": return p.name||"";
     case "rank": return v.rank||"";
-    case "ship": return ship? shipLabel(ship) : (v.ship_name||"");
+    case "ship": return ship? shipLabelEn(ship) : (v.ship_name||"");
     case "cargo": return (v.cargo_types||[]).join("+");
     case "signon": return v.sign_on||"";
     case "days": return dayDiff(v.sign_on, dateISO);
@@ -1406,7 +1414,7 @@ function renderHistoryTable(){
     return `<tr>
       <td><a href="#" class="linklike" onclick="goToPersonEdit('${p.id}');return false;">${esc(p.name)}</a></td>
       <td>${esc(v.rank||"")} ${esc(RANK_CN[v.rank]||"")}</td>
-      <td>${esc(ship? shipLabel(ship) : (v.ship_name||""))}</td>
+      <td>${esc(ship? shipLabelEn(ship) : (v.ship_name||""))}</td>
       <td>${esc((v.cargo_types||[]).join("+"))}</td>
       <td class="mono">${disp(v.sign_on)}</td>
       <td class="mono">${days}</td>
@@ -1430,7 +1438,7 @@ document.getElementById("btnExportHistory").addEventListener("click", ()=>{
     ["姓名","職級","職級(中)","船名","船型","上船日","已在船天數","勞務公司"]];
   for(const {person:p, voyage:v} of historySnapshot){
     const ship=State.ships.find(s=>s.name===v.ship_name);
-    aoa.push([p.name, v.rank||"", RANK_CN[v.rank]||"", ship? shipLabel(ship):(v.ship_name||""), (v.cargo_types||[]).join("+"), disp(v.sign_on), dayDiff(v.sign_on,dateISO), p.manning_agency||""]);
+    aoa.push([p.name, v.rank||"", RANK_CN[v.rank]||"", ship? shipLabelEn(ship):(v.ship_name||""), (v.cargo_types||[]).join("+"), disp(v.sign_on), dayDiff(v.sign_on,dateISO), p.manning_agency||""]);
   }
   const wb=XLSX.utils.book_new();
   const ws=XLSX.utils.aoa_to_sheet(aoa);
@@ -1790,6 +1798,23 @@ function exportPersonMatrix(personId){
     const colObj={rank, vals};
     const oc=[["欄位","數值"], ...OCIMF_FIELDS.map(([label,fn])=>[label, ocimfVal(colObj,fn)])];
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(oc), "OCIMF貼上用");
+    const t=todayISO();
+    const sortedVoyages=[...person.voyages].sort((a,b)=>(a.sign_on||"").localeCompare(b.sign_on||""));
+    const voyAoa=[[`${person.name} — 海上資歷（共 ${sortedVoyages.length} 筆）`],[],
+      ["職級","船名","船型","上船日","下船日","天數","備註"],
+      ...sortedVoyages.map(v=>[
+        `${v.rank||""}${v.rank&&RANK_CN[v.rank]?" "+RANK_CN[v.rank]:""}`,
+        v.ship_name||"",
+        (v.cargo_types||[]).join("+"),
+        disp(v.sign_on)||"",
+        v.sign_off? disp(v.sign_off) : "在船中",
+        v.sign_on? Math.max(dayDiff(v.sign_on, v.sign_off||t),0) : "",
+        v.note||""
+      ])
+    ];
+    const voyWs=XLSX.utils.aoa_to_sheet(voyAoa);
+    voyWs["!cols"]=[{wch:14},{wch:18},{wch:12},{wch:12},{wch:12},{wch:8},{wch:20}];
+    XLSX.utils.book_append_sheet(wb, voyWs, "海上資歷");
     XLSX.writeFile(wb, `CrewMatrix_${person.name}_${todayISO().replaceAll("-","")}.xlsx`);
     logAction("匯出個人 Crew Matrix", `${person.name}（${rank}${shipName?"，"+shipName:""}）`);
   }catch(e){ notify("匯出失敗："+e.message,"err"); }
@@ -1831,9 +1856,21 @@ document.addEventListener("click", closePersonExportMenu);
 document.addEventListener("scroll", closePersonExportMenu, true);
 
 /* ── 個人編輯視圖（整頁切換，不用彈出視窗）── */
+function refreshFleetShipsDatalist(){
+  const dl=document.getElementById("fleetShipsList");
+  if(!dl) return;
+  const list=[...State.ships]
+    .filter(s=>s.name)
+    .sort((a,b)=>(a.name_en||a.name||"").localeCompare(b.name_en||b.name||""));
+  dl.innerHTML = list.map(s=>{
+    const en=s.name_en||s.name;
+    return `<option value="${esc(en)}">${esc(s.name)}</option>`;
+  }).join("");
+}
 function openPersonEdit(personId){
   const p=State.persons.get(personId);
   if(!p){ notify("找不到此船員", "err"); return; }
+  refreshFleetShipsDatalist();
   document.getElementById("rosterListView").hidden = true;
   const view=document.getElementById("rosterEditView");
   view.hidden = false;
@@ -1907,7 +1944,7 @@ function voyageRow(v,i){
       <option value="">—</option>
       ${["CAPT.","C/O","2/O","3/O","C/E","2/E","3/E","4/E","Cadet"].map(r=>`<option value="${r}" ${v.rank===r?"selected":""}>${r} ${RANK_CN[r]}</option>`).join("")}
     </select></td>
-    <td><input type="text" class="v-ship" value="${esc(v.ship_name||"")}" style="width:120px"></td>
+    <td><input type="text" class="v-ship" value="${esc(v.ship_name||"")}" style="width:130px" list="fleetShipsList" placeholder="船舶英文名或自填"></td>
     <td><input type="date" class="v-on" value="${v.sign_on||""}"></td>
     <td>${onboard
         ? `<span class="tag green">在船中</span> <button class="btn sm" onclick="fillOff(this)">填今日下船</button><input type="date" class="v-off" value="" style="display:none">`
