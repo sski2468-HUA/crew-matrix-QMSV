@@ -465,10 +465,7 @@ table.matrix tr.yellow td{background:var(--yellow)}
         <ol style="margin:10px 0 0;padding-left:20px;font-size:13.5px;line-height:2">
           <li>上方選單選船，下方表格會即時算出每個職位的 Crew Matrix 數字，跟原本紙本表格格式一致，黃色列是 SIRE 檢查會看的重點年資欄位。</li>
           <li><b>達標檢查</b>——表格下方會自動算出「資深甲級船員（Master+C/O 合計）」與「資淺甲級船員（2/O+3/O 合計）」是否達到公司規定的年資門檻，達標／未達標一目了然。</li>
-          <li><b>匯出 Excel</b>——會下載一個含兩張分頁的檔案：「Crew Matrix」跟印出來的格式一樣；「OCIMF貼上用」順序、欄位名稱跟 OCIMF SIRE 網頁「Edit Officer」表單完全一致（Rank → Watchkeeper on this ship → Nationality →……→ English proficiency），由上到下對照輸入即可。</li>
-          <li><b>複製整欄</b>——表格最下方每個職位下面有「複製整欄」按鈕，複製出來的順序也是照 OCIMF 網頁表單排的，可以直接貼到文字編輯器對照，一欄一欄輸入不用來回切換視窗核對數字。</li>
-          <li><b>Watchkeeper on this ship 怎麼判斷</b>——系統自動規則：船長、輪機長算「No」，其餘職位（大副／二副／三副／大管／二管／三管）都算「Yes」。如果實際狀況不同，匯出後手動改這一格即可。</li>
-          <li><b>Date joined this vessel 是什麼</b>——這欄跟 Crew Matrix 表格裡的「Months on vessel this tour of duty」算的是同一件事，但 OCIMF 網頁要的是實際日期（例如 23 Feb 2026）不是月數，系統會自動換算成日期格式輸出。</li>
+          <li><b>匯出 Excel</b>——會下載一個Excel檔案，「Crew Matrix」分頁跟印出來的格式一樣，年資欄位都是公式，不是寫死的數字。</li>
           <li><b>匯出船上核對用檔案</b>——更新完成後要寄給船上核對時用這個。會產生一個 Excel，第一頁是 Crew Matrix 總表，後面每一頁是該船目前每位在船船員的完整海上資歷（跟原本個人資歷表同樣的欄位、同樣的順序），船上人員可以直接核對自己完整的航次紀錄，不是只看到一個年資合計數字。<span class="hint">目前缺配的職位不會產生分頁；因為用的是免費版試算表工具，格式是純資料表格（沒有原本黃底、合併儲存格那些美化），但內容、順序完全一致。</span></li>
           <li><b>匯出 PDF（船上核對用）</b>——跟上面那個 Excel 內容一樣（總表＋每位在船人員完整資歷），但如果船上要的是 PDF 檔（例如列印張貼、或不方便開 Excel），用這個。點下去會開一個新分頁排版好的頁面，並自動跳出瀏覽器的「列印」視窗，把「印表機」選成<b>「另存為 PDF」</b>存下來即可；如果沒有自動跳出，畫面右上角有一顆「🖨 列印／另存為 PDF」按鈕可以手動點。</li>
           <li><b>船舶／職位設定</b>——可修改船名、本船船型（影響 Years on this type of tanker 的計算），以及每個職位欄要用哪個「年資職級」計算、目前指派給誰、新增或刪除職位欄。<b style="color:var(--bad)">刪除船舶需要密碼。</b></li>
@@ -489,9 +486,7 @@ table.matrix tr.yellow td{background:var(--yellow)}
             <tr><td class="label">Years on all types of tanker</td><td>同「Years in Rank」的職級天數，但船型只要是 Chem／Oil-Chem／Oil／Gas 其中之一都算（不含 Other），不受本船船型設定限制 ÷ 365</td></tr>
             <tr><td class="label">Months on vessel this tour of duty</td><td>(今天 − 最近一次上船日) ÷ 30</td></tr>
             <tr><td class="label">Administration acceptance</td><td>目前固定顯示 N/A（沒有對應的原始資料欄位）</td></tr>
-            <tr><td class="label">Watchkeeper on this ship<span class="hint">（OCIMF 匯出用）</span></td><td>職級是 CAPT.（船長）或 C/E（輪機長）→ No；其餘職級 → Yes</td></tr>
-            <tr><td class="label">Date joined this vessel<span class="hint">（OCIMF 匯出用）</span></td><td>跟「Months on vessel this tour of duty」用同一個日期（最近一次上船日），只是改成日期格式（例：23 Feb 2026）不是月數</td></tr>
-            <tr><td class="label">Radio qualification<span class="hint">（OCIMF 匯出用）</span></td><td>個人資歷裡「電台證書」欄位有填寫任何內容 → Yes；空白 → No</td></tr>
+            <tr><td class="label">Radio qualification</td><td>個人資歷裡「電台證書」欄位有填寫的內容</td></tr>
           </tbody>
         </table>
         <p class="hint" style="margin-top:10px">Cadet（實習生）期間<b>不計入任何職級年資</b>；一個人可能同時出現在多筆重疊或連續航次裡，系統會逐筆航次分別計算天數再加總，不會用「進公司日到現在」這種籠統算法去推估職級年資。</p>
@@ -844,6 +839,11 @@ function fmtD(d){return `${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate
 function todayISO(){return fmtD(new Date());}
 function disp(iso){return iso? iso.replaceAll("-","/") : "";}
 function dayDiff(a,b){return Math.round((new Date(b)-new Date(a))/86400000);}
+function isoToDate(iso){
+  if(!iso) return null;
+  const [y,m,d]=iso.split("-").map(Number);
+  return new Date(y, m-1, d);
+}
 function toISO(v){
   if(v==null||v==="") return null;
   if(v instanceof Date && !isNaN(v)) return fmtD(v);
@@ -1081,38 +1081,37 @@ function matrixColumn(person, postRank, shipTypes, today){
     "_lastOnISO": lastOn,
   };
 }
-function formatOcimfDate(iso){
-  if(!iso) return "";
-  const d=new Date(iso+"T00:00:00");
-  const MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  return `${d.getDate()} ${MON[d.getMonth()]} ${d.getFullYear()}`;
+/* ── 把 matrixColumn() 算出的年資數字改成 Excel 公式，讓船員自己在Excel裡能核對算法 ──
+   公式全部引用「海上資歷」明細分頁（欄位配置固定：C=職級代碼, F=上船日期, G=下船日期, H=天數,
+   I~M=Chem/Oil-Chem/Oil/Gas/Other flag，K3=進入公司日期），資料範圍固定抓第9~1000列。
+   計算邏輯跟 matrixColumn() 完全對應：同一趟航次若橫跨多個船型，會在各船型分別重複計入天數
+   （沿用原本 daysMatrix() 的設計），watchkeeping 年資不限船型（涵蓋 Chem/Oil-Chem/Oil/Gas/Other 五種）。 */
+const TYPE_COL_MAP={Chem:"I","Oil/Chem":"J",Oil:"K",Gas:"L",Other:"M"};
+const VOY_ROW_END=1000, VOY_ROW_START=9;
+function xlRankArray(ranks){ return "{"+ranks.map(r=>`"${r}"`).join(";")+"}"; }
+function xlSumifsTerm(sheetRef, rankList, typeCol){
+  const sn=`'${sheetRef}'`;
+  return `SUM(SUMIFS(${sn}!$H$${VOY_ROW_START}:$H$${VOY_ROW_END},${sn}!$C$${VOY_ROW_START}:$C$${VOY_ROW_END},${xlRankArray(rankList)},${sn}!$${typeCol}$${VOY_ROW_START}:$${typeCol}$${VOY_ROW_END},"V"))`;
 }
-/* ── OCIMF SIRE Crew Matrix 網頁「Edit Officer」表單的實際欄位順序 ──
-   匯出 Excel 的「OCIMF貼上用」分頁跟「複製整欄」都照這個順序，
-   方便對照 OCIMF 網頁由上到下直接貼。 */
-const OCIMF_FIELDS=[
-  ["Rank", c=> c.rank],
-  ["Watchkeeper on this ship", c=> (c.rank==="CAPT."||c.rank==="C/E")? "No":"Yes"],
-  ["Nationality", c=> c.vals["Nationality"]],
-  ["Certificate of competency", c=> c.vals["Certificate of Competency"]],
-  ["Issuing country", c=> c.vals["Issuing Country"]],
-  ["Administration acceptance", c=> c.vals["Administration acceptance"]],
-  ["Tanker certification", c=> c.vals["Tanker certification"]],
-  ["Specialised tanker training", c=> c.vals["STCW V para 1 or 2 for current cargo"]],
-  ["Radio qualification", c=> c.vals["Radio qualification"]? "Yes":"No"],
-  ["Years with operator", c=> c.vals["Years with Operator"]],
-  ["Years in rank", c=> c.vals["Years in Rank"]],
-  ["Years on this type of tanker (i.e. oil, chemical or gas)", c=> c.vals["Years on this type of tanker"]],
-  ["Total years as watchkeeping officer", c=> c.vals["Years of watchkeeping officer"]],
-  ["Years on all types of tanker", c=> c.vals["Years on all types of tanker"]],
-  ["Date joined this vessel", c=> formatOcimfDate(c.vals["_lastOnISO"])],
-  ["English proficiency", c=> c.vals["English proficiency"]],
-];
-function ocimfVal(c,fn){
-  const v=fn(c);
-  if(v==null || v==="") return "";
-  if(typeof v==="number") return +v.toFixed(1);
-  return v;
+function xlYearsTerm(sheetRef, rankList){
+  return `(${["Chem","Oil/Chem","Oil","Gas","Other"].map(t=>xlSumifsTerm(sheetRef, rankList, TYPE_COL_MAP[t])).join("+")})/365`;
+}
+function matrixFormulaSet(sheetRef, person, postRank, shipTypes){
+  const sn=`'${sheetRef}'`;
+  const order = ENG.includes(postRank)? ENG : DECK;
+  const idx = Math.max(order.indexOf(postRank), 0);
+  const wkRanks = order.slice(Math.max(idx,1));
+  const hasVoyages = person.voyages && person.voyages.length>0;
+  const out={};
+  out["Years with Operator"] = person.join_date? `(TODAY()-${sn}!$K$3)/365` : "";
+  out["Years in Rank"] = xlYearsTerm(sheetRef, [postRank]);
+  out["Years on this type of tanker"] = shipTypes.length
+    ? `(${shipTypes.map(t=>xlSumifsTerm(sheetRef, order, TYPE_COL_MAP[t])).join("+")})/365` : 0;
+  out["Years of watchkeeping officer"] = wkRanks.length ? xlYearsTerm(sheetRef, wkRanks) : 0;
+  out["Years on all types of tanker"] = `(${["Chem","Oil/Chem","Oil","Gas"].map(t=>xlSumifsTerm(sheetRef, order, TYPE_COL_MAP[t])).join("+")})/365`;
+  out["Months on vessel this tour of duty"] = hasVoyages ? `(TODAY()-MAX(${sn}!$F$${VOY_ROW_START}:$F$${VOY_ROW_END}))/30` : "";
+  out["上船日期__formula"] = hasVoyages ? `MAX(${sn}!$F$${VOY_ROW_START}:$F$${VOY_ROW_END})` : "";
+  return out;
 }
 
 /* ════════════════════════════════════════════════════════
@@ -1434,15 +1433,25 @@ document.getElementById("historyDate").addEventListener("keydown", e=>{ if(e.key
 document.getElementById("btnExportHistory").addEventListener("click", ()=>{
   const dateISO=document.getElementById("historyDate").value;
   if(!dateISO || !historySnapshot.length) return;
-  const aoa=[[`Crew Matrix — ${disp(dateISO)} 在船名單`],[],
+  const aoa=[[`Crew Matrix — ${disp(dateISO)} 在船名單`],["查詢日期：", isoToDate(dateISO)],
     ["姓名","職級","職級(中)","船名","船型","上船日","已在船天數","勞務公司"]];
   for(const {person:p, voyage:v} of historySnapshot){
     const ship=State.ships.find(s=>s.name===v.ship_name);
-    aoa.push([p.name, v.rank||"", RANK_CN[v.rank]||"", ship? shipLabelEn(ship):(v.ship_name||""), (v.cargo_types||[]).join("+"), disp(v.sign_on), dayDiff(v.sign_on,dateISO), p.manning_agency||""]);
+    aoa.push([p.name, v.rank||"", RANK_CN[v.rank]||"", ship? shipLabelEn(ship):(v.ship_name||""), (v.cargo_types||[]).join("+"), v.sign_on? isoToDate(v.sign_on):"", "", p.manning_agency||""]);
   }
   const wb=XLSX.utils.book_new();
   const ws=XLSX.utils.aoa_to_sheet(aoa);
   ws["!cols"]=[{wch:12},{wch:8},{wch:8},{wch:16},{wch:12},{wch:12},{wch:10},{wch:14}];
+  ws["B2"].z="yyyy/mm/dd";
+  /* 「已在船天數」改成公式：查詢日期(B2) － 上船日(每列F欄)，而不是寫死的數字 */
+  historySnapshot.forEach(({voyage:v}, i)=>{
+    if(!v.sign_on) return;
+    const r=3+i; // 前3行是標題/查詢日期/表頭
+    const onAddr=XLSX.utils.encode_cell({r,c:5});
+    const daysAddr=XLSX.utils.encode_cell({r,c:6});
+    ws[onAddr].z="yyyy/mm/dd";
+    ws[daysAddr]={t:"n", f:`$B$2-${onAddr}`, z:"0"};
+  });
   XLSX.utils.book_append_sheet(wb, ws, "在船名單");
   XLSX.writeFile(wb, `在船名單_${dateISO.replaceAll("-","")}.xlsx`);
   logAction("匯出指定日期在船名單", `${disp(dateISO)}，共 ${historySnapshot.length} 人`);
@@ -1790,30 +1799,35 @@ function exportPersonMatrix(personId){
   try{
     const vals=matrixColumn(person, rank, shipTypes, todayISO());
     const wb=XLSX.utils.book_new();
+    const COMPUTED_ROW_IDX={"Years with Operator":8,"Years in Rank":9,"Years on this type of tanker":10,
+      "Years of watchkeeping officer":11,"Years on all types of tanker":12,"Months on vessel this tour of duty":13,"上船日期":14};
     const aoa=[["Crew Matrix — 個人匯出"],["姓名：", person.name, "", "職級：", rank, "", "船舶：", shipName||"(目前未指派)", "", "匯出日：", disp(todayISO())],[],
-      ["項目","數值"], ...MATRIX_ROWS.map(k=>[k, typeof vals[k]==="number"? +vals[k].toFixed(1) : (vals[k]||"")])];
+      ["項目","數值"], ...MATRIX_ROWS.map(k=>{
+        if(k in COMPUTED_ROW_IDX) return [k, ""]; // 稍後改寫成公式
+        return [k, typeof vals[k]==="number"? +vals[k].toFixed(1) : (vals[k]||"")];
+      })];
     const ws=XLSX.utils.aoa_to_sheet(aoa);
     ws["!cols"]=[{wch:36},{wch:22}];
+    /* 把年資/上船日期改成公式，引用「海上資歷」明細分頁的原始日期資料，而不是寫死的數字 */
+    const fs=matrixFormulaSet("海上資歷", person, rank, shipTypes);
+    const setF=(rowIdx, formula, fmt)=>{
+      if(formula===""||formula==null) return;
+      const addr=XLSX.utils.encode_cell({r:4+rowIdx, c:1});
+      if(typeof formula==="number"){ ws[addr]={t:"n", v:formula, z:fmt||"0.0"}; return; }
+      ws[addr]={t:"n", f:String(formula), z:fmt||"0.0"};
+    };
+    setF(COMPUTED_ROW_IDX["Years with Operator"], fs["Years with Operator"]);
+    setF(COMPUTED_ROW_IDX["Years in Rank"], fs["Years in Rank"]);
+    setF(COMPUTED_ROW_IDX["Years on this type of tanker"], fs["Years on this type of tanker"]);
+    setF(COMPUTED_ROW_IDX["Years of watchkeeping officer"], fs["Years of watchkeeping officer"]);
+    setF(COMPUTED_ROW_IDX["Years on all types of tanker"], fs["Years on all types of tanker"]);
+    setF(COMPUTED_ROW_IDX["Months on vessel this tour of duty"], fs["Months on vessel this tour of duty"]);
+    setF(COMPUTED_ROW_IDX["上船日期"], fs["上船日期__formula"], "yyyy/mm/dd");
     XLSX.utils.book_append_sheet(wb, ws, "Crew Matrix");
-    const colObj={rank, vals};
-    const oc=[["欄位","數值"], ...OCIMF_FIELDS.map(([label,fn])=>[label, ocimfVal(colObj,fn)])];
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(oc), "OCIMF貼上用");
-    const t=todayISO();
-    const sortedVoyages=[...person.voyages].sort((a,b)=>(a.sign_on||"").localeCompare(b.sign_on||""));
-    const voyAoa=[[`${person.name} — 海上資歷（共 ${sortedVoyages.length} 筆）`],[],
-      ["職級","船名","船型","上船日","下船日","天數","備註"],
-      ...sortedVoyages.map(v=>[
-        `${v.rank||""}${v.rank&&RANK_CN[v.rank]?" "+RANK_CN[v.rank]:""}`,
-        v.ship_name||"",
-        (v.cargo_types||[]).join("+"),
-        disp(v.sign_on)||"",
-        v.sign_off? disp(v.sign_off) : "在船中",
-        v.sign_on? Math.max(dayDiff(v.sign_on, v.sign_off||t),0) : "",
-        v.note||""
-      ])
-    ];
-    const voyWs=XLSX.utils.aoa_to_sheet(voyAoa);
-    voyWs["!cols"]=[{wch:14},{wch:18},{wch:12},{wch:12},{wch:12},{wch:8},{wch:20}];
+    const built=buildPersonSheetAOA(person);
+    const voyWs=XLSX.utils.aoa_to_sheet(built.aoa);
+    voyWs["!cols"]=PERSON_XLSX_COLS;
+    fillPersonSheetDayFormulas(voyWs, built.voyages, 8, person);
     XLSX.utils.book_append_sheet(wb, voyWs, "海上資歷");
     XLSX.writeFile(wb, `CrewMatrix_${person.name}_${todayISO().replaceAll("-","")}.xlsx`);
     logAction("匯出個人 Crew Matrix", `${person.name}（${rank}${shipName?"，"+shipName:""}）`);
@@ -2457,9 +2471,6 @@ function exportXlsxMatrix(){
     ws["!cols"]=[{wch:36}, ...cols.map(()=>({wch:14}))];
     const wb=XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Crew Matrix");
-    const oc=[["職位／Rank at present", ...cols.map(c=>c.post_label)], ["姓名／Name", ...cols.map(c=> c.vals? c.vals["Name"] : "")],
-      ...OCIMF_FIELDS.map(([label,fn])=> [label, ...cols.map(c=> c.vals? ocimfVal(c,fn) : "")])];
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(oc), "OCIMF貼上用");
     XLSX.writeFile(wb, `CrewMatrix_${shipLabel(ship)}_${todayISO().replaceAll("-","")}.xlsx`);
     logAction("匯出 Excel（僅總表）", shipLabel(ship));
   }catch(e){ notify("匯出失敗："+e.message, "err"); }
@@ -2523,11 +2534,10 @@ function safeSheetName(name){
   return String(name).replace(/[:\\\/\?\*\[\]]/g,"").slice(0,31) || "sheet";
 }
 function buildPersonSheetAOA(person){
-  const today=todayISO();
   const aoa=[
     ["海上資歷 (Service experience)"],
     [],
-    ["姓名：", person.name, "", "勞務公司：", person.manning_agency||"", "", "英語能力", person.english||"", "", "進入公司日期：", disp(person.join_date)],
+    ["姓名：", person.name, "", "勞務公司：", person.manning_agency||"", "", "英語能力", person.english||"", "", "進入公司日期：", person.join_date? isoToDate(person.join_date) : ""],
     ["現職：", person.rank_now||"", "", "國籍", person.nationality||"", "", "", "", "", "Tank船證書", person.tanker_cert||""],
     ["證書種類", person.coc||"", "", "發證國", person.issuing_country||"", "", "特別證書", person.stcw||"", "", "電台證書", person.radio||""],
     [],
@@ -2536,12 +2546,27 @@ function buildPersonSheetAOA(person){
   ];
   const voyages=[...person.voyages].sort((a,b)=>(a.sign_on||"").localeCompare(b.sign_on||""));
   voyages.forEach((v,i)=>{
-    const days=v.sign_on? Math.max(dayDiff(v.sign_on, v.sign_off||today),0) : "";
     const types=v.cargo_types||[];
-    aoa.push([i+1, RANK_CN[v.rank]||"", v.rank||"", v.ship_name||"", "", disp(v.sign_on), v.sign_off? disp(v.sign_off):"(在船中)", days,
+    aoa.push([i+1, RANK_CN[v.rank]||"", v.rank||"", v.ship_name||"", "",
+      v.sign_on? isoToDate(v.sign_on) : "", v.sign_off? isoToDate(v.sign_off) : "", "", // 天數欄留空，寫入公式後由 Excel 自己算
       types.includes("Chem")?"V":"", types.includes("Oil/Chem")?"V":"", types.includes("Oil")?"V":"", types.includes("Gas")?"V":"", types.includes("Other")?"V":""]);
   });
-  return aoa;
+  return {aoa, voyages};
+}
+/* 把「上船日期－下船日期」寫成 Excel 公式，而不是寫死的數字，讓船員自己在Excel裡也能核對計算過程。
+   下船日期空白＝目前仍在船上，公式改用 TODAY() 往回算，天數會隨開啟檔案當天自動變動。 */
+function fillPersonSheetDayFormulas(ws, voyages, headerRows, person){
+  voyages.forEach((v,i)=>{
+    if(!v.sign_on) return;
+    const r=headerRows+i;
+    const onAddr=XLSX.utils.encode_cell({r,c:5});
+    const offAddr=XLSX.utils.encode_cell({r,c:6});
+    const daysAddr=XLSX.utils.encode_cell({r,c:7});
+    ws[onAddr].z="yyyy/mm/dd";
+    if(v.sign_off) ws[offAddr].z="yyyy/mm/dd";
+    ws[daysAddr]={t:"n", f:`IF(${offAddr}="",TODAY()-${onAddr},${offAddr}-${onAddr})`, z:"0"};
+  });
+  if(person && person.join_date && ws["K3"]) ws["K3"].z="yyyy/mm/dd";
 }
 function exportXlsxFull(){
   const ship=State.ships.find(s=>s.id===matrixState.shipId);
@@ -2549,23 +2574,57 @@ function exportXlsxFull(){
   try{
     const cols=computeCols(ship);
     const wb=XLSX.utils.book_new();
-    const aoa=[["Crew Matrix"],["Ship Name:", shipLabel(ship), "", "", "Print date:", disp(todayISO())],[],
-      ["Qualification of Officers", ...cols.map(c=>c.post_label)],
-      ...MATRIX_ROWS.map(k=> [k, ...cols.map(c=> c.vals? (typeof c.vals[k]==="number"? +c.vals[k].toFixed(1) : c.vals[k]) : "")])];
-    const ws=XLSX.utils.aoa_to_sheet(aoa);
-    ws["!cols"]=[{wch:36}, ...cols.map(()=>({wch:14}))];
-    XLSX.utils.book_append_sheet(wb, ws, safeSheetName(ship.name));
     const usedNames=new Set([safeSheetName(ship.name)]);
-    let noPerson=0;
+    /* 先決定每個職位對應的個人明細分頁名稱，讓主表公式跟明細分頁共用同一個名字 */
     cols.forEach(c=>{
-      const person = c.person_id? State.persons.get(c.person_id) : null;
-      if(!person){ noPerson++; return; }
+      const person=c.person_id? State.persons.get(c.person_id) : null;
+      if(!person){ c._sheetName=null; c._person=null; return; }
       let sheetName=safeSheetName(c.post_label);
       let n=2; while(usedNames.has(sheetName)){ sheetName=safeSheetName(c.post_label+n); n++; }
       usedNames.add(sheetName);
-      const ws2=XLSX.utils.aoa_to_sheet(buildPersonSheetAOA(person));
+      c._sheetName=sheetName;
+      c._person=person;
+    });
+    const COMPUTED_ROW_IDX={"Years with Operator":8,"Years in Rank":9,"Years on this type of tanker":10,
+      "Years of watchkeeping officer":11,"Years on all types of tanker":12,"Months on vessel this tour of duty":13,"上船日期":14};
+    const aoa=[["Crew Matrix"],["Ship Name:", shipLabel(ship), "", "", "Print date:", disp(todayISO())],[],
+      ["Qualification of Officers", ...cols.map(c=>c.post_label)],
+      ...MATRIX_ROWS.map(k=> [k, ...cols.map(c=>{
+        if(!c.vals) return "";
+        if(c._sheetName && k in COMPUTED_ROW_IDX) return ""; // 稍後改寫成公式，這裡先留空
+        return typeof c.vals[k]==="number"? +c.vals[k].toFixed(1) : c.vals[k];
+      })])];
+    const ws=XLSX.utils.aoa_to_sheet(aoa);
+    ws["!cols"]=[{wch:36}, ...cols.map(()=>({wch:14}))];
+    /* 把年資/上船日期改寫成公式，引用該職位自己的「海上資歷」明細分頁，而不是寫死的數字 */
+    cols.forEach((c,ci)=>{
+      if(!c._sheetName || !c.vals) return;
+      const shipTypes = (ship.cargo_types && ship.cargo_types.length) ? ship.cargo_types : ["Chem","Oil/Chem","Oil","Gas"];
+      const fs=matrixFormulaSet(c._sheetName, c._person, c.rank, shipTypes);
+      const col=ci+1;
+      const setF=(rowIdx, formula, fmt)=>{
+        if(formula===""||formula==null) return;
+        const addr=XLSX.utils.encode_cell({r:4+rowIdx, c:col});
+        if(typeof formula==="number"){ ws[addr]={t:"n", v:formula, z:fmt||"0.0"}; return; }
+        ws[addr]={t:"n", f:String(formula), z:fmt||"0.0"};
+      };
+      setF(COMPUTED_ROW_IDX["Years with Operator"], fs["Years with Operator"]);
+      setF(COMPUTED_ROW_IDX["Years in Rank"], fs["Years in Rank"]);
+      setF(COMPUTED_ROW_IDX["Years on this type of tanker"], fs["Years on this type of tanker"]);
+      setF(COMPUTED_ROW_IDX["Years of watchkeeping officer"], fs["Years of watchkeeping officer"]);
+      setF(COMPUTED_ROW_IDX["Years on all types of tanker"], fs["Years on all types of tanker"]);
+      setF(COMPUTED_ROW_IDX["Months on vessel this tour of duty"], fs["Months on vessel this tour of duty"]);
+      setF(COMPUTED_ROW_IDX["上船日期"], fs["上船日期__formula"], "yyyy/mm/dd");
+    });
+    XLSX.utils.book_append_sheet(wb, ws, safeSheetName(ship.name));
+    let noPerson=0;
+    cols.forEach(c=>{
+      if(!c._person){ noPerson++; return; }
+      const built=buildPersonSheetAOA(c._person);
+      const ws2=XLSX.utils.aoa_to_sheet(built.aoa);
       ws2["!cols"]=PERSON_XLSX_COLS;
-      XLSX.utils.book_append_sheet(wb, ws2, sheetName);
+      fillPersonSheetDayFormulas(ws2, built.voyages, 8, c._person);
+      XLSX.utils.book_append_sheet(wb, ws2, c._sheetName);
     });
     XLSX.writeFile(wb, `${shipLabel(ship)}_船上核對用_${todayISO().replaceAll("-","")}.xlsx`);
     logAction("匯出 Excel（含個人資歷）", `${shipLabel(ship)}（${cols.length-noPerson} 人有明細，${noPerson} 個職位缺配未列出）`);
