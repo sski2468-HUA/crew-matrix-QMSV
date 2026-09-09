@@ -457,6 +457,7 @@ table.matrix tr.yellow td{background:var(--yellow)}
           <li>異動單左邊「下船 SIGN-OFF」會自動帶出目前在此職位的船員；右邊「上船 SIGN-ON」用下拉選單挑選接任的人（可留空，代表此職位暫時懸缺）；中間填<b>實際異動日</b>（異動單上紅字那一欄，不是預計日）。</li>
           <li>系統會同時完成：把原任者的航次填上下船日、幫新任者新增一筆在船中的航次、更新該職位目前的指派人員、寫入操作紀錄。Crew Matrix 分頁的數字會立刻反映最新狀態，不用手動重算。</li>
           <li>如果船舶清單裡沒有要異動的船，用右上角「＋ 新增船舶」建立，會自動附上 9 個標準職位（船長／大副／二副／三副／三副(2)／輪機長／大管／二管／三管）。</li>
+          <li><b>原船晉升</b>——如果船員本人沒有離船，只是在同一艘船換到更高的職位（例如 3/O 升 2/O），下船那一格勾選「原船晉升」再選要晉升到哪個（目前空缺的）職位即可：系統會自動把「上船日期」「Months on vessel this tour of duty」沿用原本的上船日，不會因為換職位就重新從今天起算；「Years in Rank」等職級年資則仍照實際換職位的日期正確分段計算。晉升目標職位不用另外在職位板上勾選。</li>
         </ol>
       </div>
 
@@ -1063,8 +1064,12 @@ function matrixColumn(person, postRank, shipTypes, today){
   const idx = Math.max(order.indexOf(postRank), 0);
   const rd=(rk,ts)=>{ const t=dm[rk]||{}; return Object.entries(t).reduce((a,[k,v])=> a+((ts && !ts.includes(k))?0:v), 0); };
   const wkRanks = order.slice(Math.max(idx,1));
-  let lastOn=null;
-  for(const v of person.voyages) if(!lastOn || v.sign_on>lastOn) lastOn=v.sign_on;
+  let lastVoy=null;
+  for(const v of person.voyages) if(!lastVoy || v.sign_on>lastVoy.sign_on) lastVoy=v;
+  /* tour_start：若這筆航次是「原船晉升」延續來的，沿用原始上船日，
+     否則就是自己的 sign_on。這樣「Months on vessel this tour of duty」
+     跟「上船日期」才不會因為晉升換職位而被重新歸零計算。 */
+  const lastOn = lastVoy? (lastVoy.tour_start||lastVoy.sign_on) : null;
   return {
     "Name": person.name, "Nationality": person.nationality, "Certificate of Competency": person.coc,
     "Issuing Country": person.issuing_country, "Administration acceptance": "N/A",
@@ -1083,9 +1088,13 @@ function matrixColumn(person, postRank, shipTypes, today){
 }
 /* ── 把 matrixColumn() 算出的年資數字改成 Excel 公式，讓船員自己在Excel裡能核對算法 ──
    公式全部引用「海上資歷」明細分頁（欄位配置固定：C=職級代碼, F=上船日期, G=下船日期, H=天數,
-   I~M=Chem/Oil-Chem/Oil/Gas/Other flag，K3=進入公司日期），資料範圍固定抓第9~1000列。
+   I~M=Chem/Oil-Chem/Oil/Gas/Other flag，N=原船晉升延續來的原上船日（沒晉升就空白），
+   O=有效上船日＝IF(N空白,F,N)（由 fillPersonSheetDayFormulas() 寫入公式），K3=進入公司日期），
+   資料範圍固定抓第9~1000列。
    計算邏輯跟 matrixColumn() 完全對應：同一趟航次若橫跨多個船型，會在各船型分別重複計入天數
-   （沿用原本 daysMatrix() 的設計），watchkeeping 年資不限船型（涵蓋 Chem/Oil-Chem/Oil/Gas/Other 五種）。 */
+   （沿用原本 daysMatrix() 的設計），watchkeeping 年資不限船型（涵蓋 Chem/Oil-Chem/Oil/Gas/Other 五種）。
+   「Months on vessel this tour of duty」「上船日期」用 INDEX/MATCH 找出 F 欄（上船日）最大的那一列，
+   再取該列的 O 欄（有效上船日），這樣原船晉升的人才不會因為換職位又重新從今天起算在船月數。 */
 const TYPE_COL_MAP={Chem:"I","Oil/Chem":"J",Oil:"K",Gas:"L",Other:"M"};
 const VOY_ROW_END=1000, VOY_ROW_START=9;
 function xlRankArray(ranks){ return "{"+ranks.map(r=>`"${r}"`).join(";")+"}"; }
@@ -1109,8 +1118,11 @@ function matrixFormulaSet(sheetRef, person, postRank, shipTypes){
     ? `(${shipTypes.map(t=>xlSumifsTerm(sheetRef, order, TYPE_COL_MAP[t])).join("+")})/365` : 0;
   out["Years of watchkeeping officer"] = wkRanks.length ? xlYearsTerm(sheetRef, wkRanks) : 0;
   out["Years on all types of tanker"] = `(${["Chem","Oil/Chem","Oil","Gas"].map(t=>xlSumifsTerm(sheetRef, order, TYPE_COL_MAP[t])).join("+")})/365`;
-  out["Months on vessel this tour of duty"] = hasVoyages ? `(TODAY()-MAX(${sn}!$F$${VOY_ROW_START}:$F$${VOY_ROW_END}))/30` : "";
-  out["上船日期__formula"] = hasVoyages ? `MAX(${sn}!$F$${VOY_ROW_START}:$F$${VOY_ROW_END})` : "";
+  const lastVoyEffOn = hasVoyages
+    ? `INDEX(${sn}!$O$${VOY_ROW_START}:$O$${VOY_ROW_END},MATCH(MAX(${sn}!$F$${VOY_ROW_START}:$F$${VOY_ROW_END}),${sn}!$F$${VOY_ROW_START}:$F$${VOY_ROW_END},0))`
+    : "";
+  out["Months on vessel this tour of duty"] = hasVoyages ? `(TODAY()-${lastVoyEffOn})/30` : "";
+  out["上船日期__formula"] = lastVoyEffOn;
   return out;
 }
 
@@ -1918,12 +1930,13 @@ function openPersonEdit(personId){
       <div style="display:flex;align-items:center;margin:18px 0 8px">
         <b style="font-size:14px">海上資歷（${p.voyages.length} 筆）</b>
       </div>
+      <p class="hint" style="margin:0 0 8px">「上船日」欄位下面那個小的日期框是<b>原船晉升專用</b>：如果這筆航次是同一人在同一艘船換更高職位（人沒有離船），這裡填「原本」的上船日，「Months on vessel this tour of duty」跟「上船日期」才不會被新職位的日期蓋掉；一般正常航次留空即可。</p>
       <div class="tblwrap" style="max-height:none">
         <table class="tbl" id="voyageTable">
           <thead><tr>
             <th class="sortable" data-sort="rank">職級<span class="sortarrow"></span></th>
             <th class="sortable" data-sort="ship">船名<span class="sortarrow"></span></th>
-            <th class="sortable" data-sort="on">上船日<span class="sortarrow"></span></th>
+            <th class="sortable" data-sort="on">上船日 / 原船晉升原上船日<span class="sortarrow"></span></th>
             <th class="sortable" data-sort="off">下船日<span class="sortarrow"></span></th>
             <th class="sortable" data-sort="days">天數<span class="sortarrow"></span></th>
             <th>船型</th><th>備註</th><th></th>
@@ -1959,7 +1972,9 @@ function voyageRow(v,i){
       ${["CAPT.","C/O","2/O","3/O","C/E","2/E","3/E","4/E","Cadet"].map(r=>`<option value="${r}" ${v.rank===r?"selected":""}>${r} ${RANK_CN[r]}</option>`).join("")}
     </select></td>
     <td><input type="text" class="v-ship" value="${esc(v.ship_name||"")}" style="width:130px" list="fleetShipsList" placeholder="船舶英文名或自填"></td>
-    <td><input type="date" class="v-on" value="${v.sign_on||""}"></td>
+    <td><input type="date" class="v-on" value="${v.sign_on||""}">
+      <input type="date" class="v-tourstart" value="${v.tour_start||""}" style="margin-top:4px;font-size:11px;opacity:.8" title="原船晉升專用：這筆若是原船晉升延續來的，填原本的上船日；一般航次留空">
+    </td>
     <td>${onboard
         ? `<span class="tag green">在船中</span> <button class="btn sm" onclick="fillOff(this)">填今日下船</button><input type="date" class="v-off" value="" style="display:none">`
         : `<input type="date" class="v-off" value="${v.sign_off||""}">`}</td>
@@ -2042,7 +2057,9 @@ async function savePersonDrawer(personId){
     const sign_off = offInput.style.display==="none" ? null : (offInput.value||null);
     const type=tr.querySelector(".v-type").value;
     const note=tr.querySelector(".v-note").value.trim();
-    return {rank, ship_name, sign_on, sign_off, cargo_types: type? [type]:[], note};
+    const tourStartInput=tr.querySelector(".v-tourstart");
+    const tour_start=tourStartInput? (tourStartInput.value||null) : null;
+    return {rank, ship_name, sign_on, sign_off, cargo_types: type? [type]:[], note, tour_start};
   }).filter(v=>v.sign_on);
 
   try{
@@ -2126,9 +2143,21 @@ function renderBatchChangeForm(ship){
             ${offPerson? `
               <div style="font-size:15px;font-weight:800">${esc(offPerson.name)}</div>
               ${onboardVoy
-                ? `<div class="hint">在船中：${esc(onboardVoy.ship_name)}，${disp(onboardVoy.sign_on)} 上船（${dayDiff(onboardVoy.sign_on, todayISO())} 天）</div>`
+                ? `<div class="hint">在船中：${esc(onboardVoy.ship_name)}，${disp(onboardVoy.tour_start||onboardVoy.sign_on)} 上船（${dayDiff(onboardVoy.tour_start||onboardVoy.sign_on, todayISO())} 天）</div>`
                 : `<div class="hint" style="color:var(--bad)">個人檔無在船中航次，只會解除職位</div>`}
               <label class="field" style="margin-top:6px;max-width:180px">下船日<input type="date" class="batch-off-date" data-post="${po.id}" value="${todayISO()}"></label>
+              ${onboardVoy ? `
+              <label style="display:flex;align-items:flex-start;gap:6px;margin-top:8px;font-size:12px;color:var(--ink-2);cursor:pointer;max-width:230px">
+                <input type="checkbox" class="batch-promote-flag" data-post="${po.id}" style="margin-top:2px" onchange="togglePromoteTarget('${po.id}', this.checked)">
+                <span>原船晉升（人未離船，只是換職位——上船日期沿用原本 ${disp(onboardVoy.tour_start||onboardVoy.sign_on)}，不重新計算在船月數）</span>
+              </label>
+              <div class="batch-promote-target-wrap" data-post="${po.id}" style="display:none;margin-top:6px">
+                <select class="batch-promote-target" data-post="${po.id}" style="width:100%;max-width:230px">
+                  <option value="">晉升到哪個職位…</option>
+                  ${ship.posts.filter(p2=>p2.id!==po.id && !p2.person_id).map(p2=>`<option value="${p2.id}">${esc(p2.post_label)}</option>`).join("")}
+                </select>
+                <div class="hint" style="margin-top:4px">上面的「下船日」會當作晉升生效日；只能晉升到目前空缺的職位，不用另外在職位板上勾選該職位。</div>
+              </div>` : ""}
             ` : `<div class="hint">此職位目前無人，僅辦理上船</div>`}
           </div>
           <div style="position:relative">
@@ -2147,6 +2176,10 @@ function renderBatchChangeForm(ship){
       <button class="btn primary" onclick="submitBatchChanges()">✓ 確認送出全部異動（${posts.length}）</button>
     </div>
   </div>`;
+}
+function togglePromoteTarget(postId, checked){
+  const wrap=document.querySelector(`.batch-promote-target-wrap[data-post="${postId}"]`);
+  if(wrap) wrap.style.display=checked? "" : "none";
 }
 function clearPostSelection(){
   changeState.selected.clear();
@@ -2167,12 +2200,26 @@ async function submitBatchChanges(){
       const onDateEl=document.querySelector(`.batch-on-date[data-post="${po.id}"]`);
       const offDate=offDateEl? offDateEl.value : "";
       const onDate=onDateEl? onDateEl.value : "";
+      const promoteFlagEl=document.querySelector(`.batch-promote-flag[data-post="${po.id}"]`);
+      const promoteTargetEl=document.querySelector(`.batch-promote-target[data-post="${po.id}"]`);
+      const promoteTargetId = (promoteFlagEl && promoteFlagEl.checked) ? (promoteTargetEl? promoteTargetEl.value : "") : "";
       const acts=[];
       if(po.person_id){
         const offPerson=State.persons.get(po.person_id);
         if(offPerson){
           const ob=offPerson.voyages.find(v=>!v.sign_off);
-          if(ob){
+          if(promoteTargetId){
+            if(!ob){ notify(`${po.post_label}：原船晉升需要有在船中航次`,"err"); continue; }
+            const targetPost=ship.posts.find(p=>p.id===promoteTargetId);
+            if(!targetPost){ notify(`${po.post_label}：請選擇要晉升到的職位`,"err"); continue; }
+            if(!offDate){ notify(`${po.post_label}：請填晉升生效日`,"err"); continue; }
+            const tourStart = ob.tour_start || ob.sign_on;
+            await sb("PATCH","crew_voyages",{query:`?id=eq.${ob.id}`, body:{sign_off:offDate}});
+            await sb("POST","crew_voyages",{body:[{person_id:offPerson.id, rank:targetPost.rank, ship_name:ship.name, sign_on:offDate, sign_off:null, cargo_types: ship.cargo_types||[], tour_start:tourStart}]});
+            await sb("PATCH","crew_persons",{query:`?id=eq.${offPerson.id}`, body:{rank_now:targetPost.rank}});
+            await sb("PATCH","crew_ship_posts",{query:`?id=eq.${targetPost.id}`, body:{person_id:offPerson.id}});
+            acts.push(`${offPerson.name} 原船晉升 → ${targetPost.post_label}（${disp(offDate)} 生效，上船日沿用 ${disp(tourStart)}）`);
+          }else if(ob){
             if(!offDate){ notify(`${po.post_label}：請填下船日`,"err"); continue; }
             await sb("PATCH","crew_voyages",{query:`?id=eq.${ob.id}`, body:{sign_off:offDate}});
             acts.push(`${offPerson.name} 下船（${ob.ship_name}，${disp(offDate)}）`);
@@ -2528,8 +2575,8 @@ document.getElementById("btnCopySubmitLink").addEventListener("click", async ()=
    分頁格式比照原本「海上資歷 (Service experience)」個人表，方便船上比對紙本。
    ※ 用的是免費版 SheetJS，寫不出顏色/合併儲存格這類樣式，
    內容、欄位順序跟原表一致，但畫面呈現會是純資料表格，不會有黃底/邊框等美化。 */
-/* 個人資歷表（海上資歷）Excel 統一欄寬，A~M 十三欄，讓匯出的檔案不用再手動調整寬度 */
-const PERSON_XLSX_COLS=[{wch:6},{wch:10},{wch:8},{wch:20},{wch:14},{wch:15},{wch:15},{wch:8},{wch:6},{wch:8},{wch:6},{wch:6},{wch:6}];
+/* 個人資歷表（海上資歷）Excel 統一欄寬，A~M 十三欄＋N/O 兩欄「原船晉升」輔助欄，讓匯出的檔案不用再手動調整寬度 */
+const PERSON_XLSX_COLS=[{wch:6},{wch:10},{wch:8},{wch:20},{wch:14},{wch:15},{wch:15},{wch:8},{wch:6},{wch:8},{wch:6},{wch:6},{wch:6},{wch:15},{wch:15}];
 function safeSheetName(name){
   return String(name).replace(/[:\\\/\?\*\[\]]/g,"").slice(0,31) || "sheet";
 }
@@ -2541,15 +2588,17 @@ function buildPersonSheetAOA(person){
     ["現職：", person.rank_now||"", "", "國籍", person.nationality||"", "", "", "", "", "Tank船證書", person.tanker_cert||""],
     ["證書種類", person.coc||"", "", "發證國", person.issuing_country||"", "", "特別證書", person.stcw||"", "", "電台證書", person.radio||""],
     [],
-    ["項次","職位","","船名","","上船日期","下船日期","在船天數","化","油/化","油","氣體","其他"],
-    ["No.","Rank","","Ship name","","Date of Sign On","Date of Sign Off","Days","Chem","Oil/Chem","Oil","Gas","Other"],
+    ["項次","職位","","船名","","上船日期","下船日期","在船天數","化","油/化","油","氣體","其他","原船晉升-原上船日","（內部用，勿刪）有效上船日"],
+    ["No.","Rank","","Ship name","","Date of Sign On","Date of Sign Off","Days","Chem","Oil/Chem","Oil","Gas","Other","Tour start (if promoted)","Effective sign-on"],
   ];
   const voyages=[...person.voyages].sort((a,b)=>(a.sign_on||"").localeCompare(b.sign_on||""));
   voyages.forEach((v,i)=>{
     const types=v.cargo_types||[];
     aoa.push([i+1, RANK_CN[v.rank]||"", v.rank||"", v.ship_name||"", "",
       v.sign_on? isoToDate(v.sign_on) : "", v.sign_off? isoToDate(v.sign_off) : "", "", // 天數欄留空，寫入公式後由 Excel 自己算
-      types.includes("Chem")?"V":"", types.includes("Oil/Chem")?"V":"", types.includes("Oil")?"V":"", types.includes("Gas")?"V":"", types.includes("Other")?"V":""]);
+      types.includes("Chem")?"V":"", types.includes("Oil/Chem")?"V":"", types.includes("Oil")?"V":"", types.includes("Gas")?"V":"", types.includes("Other")?"V":"",
+      v.tour_start? isoToDate(v.tour_start) : "", "" // 原上船日：只有「原船晉升」延續來的航次才會有值；有效上船日欄留空，寫入公式後由 Excel 自己算
+    ]);
   });
   return {aoa, voyages};
 }
@@ -2562,9 +2611,16 @@ function fillPersonSheetDayFormulas(ws, voyages, headerRows, person){
     const onAddr=XLSX.utils.encode_cell({r,c:5});
     const offAddr=XLSX.utils.encode_cell({r,c:6});
     const daysAddr=XLSX.utils.encode_cell({r,c:7});
+    const tourStartAddr=XLSX.utils.encode_cell({r,c:13});
+    const effOnAddr=XLSX.utils.encode_cell({r,c:14});
     ws[onAddr].z="yyyy/mm/dd";
     if(v.sign_off) ws[offAddr].z="yyyy/mm/dd";
     ws[daysAddr]={t:"n", f:`IF(${offAddr}="",TODAY()-${onAddr},${offAddr}-${onAddr})`, z:"0"};
+    if(v.tour_start && ws[tourStartAddr]) ws[tourStartAddr].z="yyyy/mm/dd";
+    /* 有效上船日＝原船晉升就沿用N欄的原上船日，否則就是自己這筆的上船日，
+       跟網頁版 matrixColumn() 的 tour_start 邏輯完全對應，讓「Months on vessel this tour of
+       duty」「上船日期」這兩個公式（見 matrixFormulaSet()）能抓到正確的日期，不會因晉升換職位而歸零。 */
+    ws[effOnAddr]={t:"n", f:`IF(${tourStartAddr}="",${onAddr},${tourStartAddr})`, z:"yyyy/mm/dd"};
   });
   if(person && person.join_date && ws["K3"]) ws["K3"].z="yyyy/mm/dd";
 }
