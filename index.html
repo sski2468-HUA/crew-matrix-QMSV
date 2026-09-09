@@ -1145,6 +1145,9 @@ function requireAdminTabAuth(){
   localStorage.setItem(ADMIN_TAB_GUARD_KEY, today);
   return true;
 }
+/* ── 記住畫面停留位置：F5 重新整理後留在原本的頁籤/子頁籤/船舶，不要跳回預設畫面 ── */
+const UI_TAB_KEY="crew_ui_tab", UI_MATRIXSUB_KEY="crew_ui_matrixsub", UI_DEPT_KEY="crew_ui_dept",
+      UI_ROSTERSUB_KEY="crew_ui_rostersub", UI_SHIPID_KEY="crew_ui_shipid";
 let lastMainTab="matrix";
 function showTab(id){
   if(id==="admin" && !requireAdminTabAuth()) return;
@@ -1163,7 +1166,7 @@ function showTab(id){
   if(id==="admin") renderAdminTab();
 }
 document.querySelectorAll(".maintab[data-tab]").forEach(el=>{
-  el.addEventListener("click", ()=> showTab(el.dataset.tab));
+  el.addEventListener("click", ()=>{ showTab(el.dataset.tab); localStorage.setItem(UI_TAB_KEY, el.dataset.tab); });
 });
 document.getElementById("btnGuideIcon").addEventListener("click", ()=> showTab("guide"));
 document.getElementById("btnAdminIcon").addEventListener("click", ()=> showTab("admin"));
@@ -1276,6 +1279,7 @@ document.getElementById("matrixSubSeg").addEventListener("click", e=>{
   document.getElementById("matrixSubMatrix").hidden = btn.dataset.v!=="matrix";
   document.getElementById("matrixSubConfig").hidden = btn.dataset.v!=="config";
   document.getElementById("matrixSubChange").hidden = btn.dataset.v!=="change";
+  localStorage.setItem(UI_MATRIXSUB_KEY, btn.dataset.v);
 });
 document.getElementById("rosterSubSeg").addEventListener("click", e=>{
   const btn=e.target.closest("button"); if(!btn) return;
@@ -1294,6 +1298,7 @@ document.getElementById("rosterSubSeg").addEventListener("click", e=>{
   }
   if(btn.dataset.v==="history") initHistoryFilters();
   if(btn.dataset.v==="submissions") renderSubmissionTable();
+  localStorage.setItem(UI_ROSTERSUB_KEY, btn.dataset.v);
 });
 /* ── ④ 指定日期在船查詢：依上船日/下船日回溯，找出某一天實際在船的船員與船名 ── */
 let historySnapshot=[];
@@ -2326,6 +2331,7 @@ document.getElementById("matrixShipSel").addEventListener("change", e=>{
   matrixState.shipId=e.target.value;
   changeState.selected.clear();
   renderMatrixTab();
+  localStorage.setItem(UI_SHIPID_KEY, matrixState.shipId);
 });
 document.getElementById("btnDeleteCurrentShip").addEventListener("click", ()=>{
   if(matrixState.shipId) deleteShip(matrixState.shipId);
@@ -2424,6 +2430,7 @@ document.getElementById("matrixDeptSeg").addEventListener("click", e=>{
   btn.classList.add("on");
   matrixDeptView=btn.dataset.v;
   renderMatrixTable();
+  localStorage.setItem(UI_DEPT_KEY, btn.dataset.v);
 });
 
 /* ── 資深/資淺甲級船員合計年資達標檢查 ──
@@ -3206,7 +3213,34 @@ document.getElementById("btnChangePassword").addEventListener("click", changeRun
    ════════════════════════════════════════════════════════ */
 (async function init(){
   await loadAll();
+  const savedShip=localStorage.getItem(UI_SHIPID_KEY);
+  if(savedShip) matrixState.shipId=savedShip;
   renderMatrixTab();
+
+  /* 還原上次停留的頁籤/子頁籤，重新整理後不要跳回預設畫面 */
+  const savedTab=localStorage.getItem(UI_TAB_KEY);
+  if(savedTab==="roster") showTab("roster");
+
+  const savedMatrixSub=localStorage.getItem(UI_MATRIXSUB_KEY);
+  if(savedMatrixSub){
+    const btn=document.querySelector(`#matrixSubSeg button[data-v="${savedMatrixSub}"]`);
+    if(btn) btn.click();
+  }
+  const savedDept=localStorage.getItem(UI_DEPT_KEY);
+  if(savedDept){
+    const btn=document.querySelector(`#matrixDeptSeg button[data-v="${savedDept}"]`);
+    if(btn) btn.click();
+  }
+  const savedRosterSub=localStorage.getItem(UI_ROSTERSUB_KEY);
+  if(savedRosterSub && savedRosterSub!=="submissions"){
+    const btn=document.querySelector(`#rosterSubSeg button[data-v="${savedRosterSub}"]`);
+    if(btn) btn.click();
+  }else if(savedRosterSub==="submissions" && localStorage.getItem(GUARD_DATE_KEY)===todayISO()){
+    // 「資料審核入庫」需要密碼，只有今天已經驗證過才自動還原，避免重新整理就跳出密碼視窗
+    const btn=document.querySelector(`#rosterSubSeg button[data-v="submissions"]`);
+    if(btn) btn.click();
+  }
+
   purgeOldLogs();
 })();
 </script>
