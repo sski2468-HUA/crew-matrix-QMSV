@@ -217,7 +217,6 @@ table.matrix tr.yellow td{background:var(--yellow)}
     </nav>
     <div class="topicons">
       <span class="hint" id="topStats" style="margin-right:8px"></span>
-      <a href="https://sski2468-hua.github.io/fleet-inspection/" class="iconlink" title="回船舶檢查系統">⟵</a>
       <button type="button" class="iconlink" id="btnGuideIcon" title="操作流程">📖</button>
       <button type="button" class="iconlink" id="btnAdminIcon" title="資料管理">🔐</button>
     </div>
@@ -457,8 +456,71 @@ table.matrix tr.yellow td{background:var(--yellow)}
           <li>異動單左邊「下船 SIGN-OFF」會自動帶出目前在此職位的船員；右邊「上船 SIGN-ON」用下拉選單挑選接任的人（可留空，代表此職位暫時懸缺）；中間填<b>實際異動日</b>（異動單上紅字那一欄，不是預計日）。</li>
           <li>系統會同時完成：把原任者的航次填上下船日、幫新任者新增一筆在船中的航次、更新該職位目前的指派人員、寫入操作紀錄。Crew Matrix 分頁的數字會立刻反映最新狀態，不用手動重算。</li>
           <li>如果船舶清單裡沒有要異動的船，用右上角「＋ 新增船舶」建立，會自動附上 9 個標準職位（船長／大副／二副／三副／三副(2)／輪機長／大管／二管／三管）。</li>
-          <li><b>原船晉升</b>——如果船員本人沒有離船，只是在同一艘船換到更高的職位（例如 3/O 升 2/O），下船那一格勾選「原船晉升」再選要晉升到哪個（目前空缺的）職位即可：系統會自動把「上船日期」「Months on vessel this tour of duty」沿用原本的上船日，不會因為換職位就重新從今天起算；「Years in Rank」等職級年資則仍照實際換職位的日期正確分段計算。晉升目標職位不用另外在職位板上勾選。</li>
+          <li><b>原船晉升</b>——如果船員本人沒有離船，只是換到更高的職位，<b style="color:var(--bad)">不要</b>用「先下船、再上船」處理，改用下面「原船晉升」專區的步驟。</li>
         </ol>
+      </div>
+
+      <div class="panelbox" style="margin-bottom:16px">
+        <b style="font-size:15px">🔺 原船晉升——同一人在同一艘船換職位，人不下船</b>
+        <p class="hint" style="margin:8px 0 14px">情境舉例：3/O 王小明表現優異，公司決定原船提升為 2/O，人完全不用下船，只是換一張聘書、換一個職位。這種情況<b style="color:var(--bad)">不能</b>用「先辦 3/O 下船、再辦 2/O 上船」處理，會導致「上船日期」被重算成今天，「Months on vessel this tour of duty」（本航次在船月數）跟他實際在船天數對不上。請照下面步驟用專屬的勾選功能處理。</p>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:16px">
+          <div class="changebox">
+            <div class="hd">一般換人</div>
+            <div style="font-size:13.5px;line-height:1.7">船員 A 下船離開，船員 B 上船接任，兩人是<b>不同人</b>。用職位板上正常的下船／上船欄位即可，見上方②的步驟。</div>
+          </div>
+          <div class="changebox" style="border-left-color:var(--signal)">
+            <div class="hd" style="color:var(--signal-d)">原船晉升</div>
+            <div style="font-size:13.5px;line-height:1.7">船員本人沒有離開船，只是<b>同一人</b>在同一艘船換到更高的職位。用下面這套專屬步驟。</div>
+          </div>
+        </div>
+
+        <div style="background:var(--yellow);border:1px solid #f3d3ab;border-left:4px solid var(--signal);border-radius:8px;padding:12px 16px;margin-bottom:16px">
+          <b style="color:var(--signal-d);font-size:13.5px">⚠ 千萬不要用「先下船、再上船」處理原船晉升</b>
+          <p class="hint" style="margin:6px 0 0;color:var(--ink)">這樣做系統會把「上船日期」重算成今天，「Months on vessel this tour of duty」會被錯誤歸零。原船晉升請一定要用下方「原船晉升」勾選功能。</p>
+        </div>
+
+        <b style="font-size:13.5px">操作步驟</b>
+        <ol style="margin:10px 0 16px;padding-left:20px;font-size:13.5px;line-height:2">
+          <li>進「① Crew Matrix → ③ 船員異動」，選對船舶；職位板點選王小明<b>原本</b>的職位（本例 3/O），展開電子異動單。</li>
+          <li>左邊「下船 SIGN-OFF」帶出王小明的資料，下方勾選「☑ 原船晉升（人未離船，只是換職位）」。</li>
+          <li>勾選後出現「晉升到哪個職位…」下拉選單，選 2/O。這裡只會列出船上目前<b>空缺</b>的職位——2/O 已有人的話，要先把原任者調開，空出來才能選。</li>
+          <li>上面的「下船日」欄位這時當作<b>晉升生效日</b>使用，填實際生效日期（通常是今天）。</li>
+          <li>不用在職位板再點一次「2/O」，也不用在右邊「上船 SIGN-ON」搜尋王小明本人——原船晉升全部靠左邊這組勾選框跟下拉選單處理。</li>
+          <li>核對無誤，按「✓ 確認送出全部異動」；當天第一次操作需輸入姓名與異動密碼。</li>
+        </ol>
+
+        <b style="font-size:13.5px">送出後，系統自動處理了什麼</b>
+        <ul style="margin:10px 0 16px;padding-left:20px;font-size:13.5px;line-height:2">
+          <li>把王小明原本 3/O 的在船中航次結束（下船日＝生效日）</li>
+          <li>新增一筆 2/O 在船中航次，職位、船名自動帶入，上船日＝生效日</li>
+          <li>這筆新航次額外記住「原本的上船日」，讓「上船日期」「在船月數」繼續沿用，不會歸零重算</li>
+          <li>「Years in Rank」等職級年資仍依 3/O、2/O 兩筆航次的實際日期分段計算，互不混淆</li>
+          <li>「現職」自動更新為 2/O，職位欄位自動調整指派；並寫入操作紀錄（保留 30 天）</li>
+        </ul>
+
+        <b style="font-size:13.5px">注意事項</b>
+        <ul style="margin:10px 0 16px;padding-left:20px;font-size:13.5px;line-height:2">
+          <li>只能晉升到「目前空缺」的職位；目標職位已有人時，要先處理該人的異動再回來操作。</li>
+          <li>「原船晉升」勾選框只會出現在「目前有在船中航次」的人身上；若系統顯示「無在船中航次」，代表資料本身有誤，需先回個人資料修正。</li>
+          <li>辦理原船晉升一樣需要異動密碼，跟一般換人／刪除共用同一組；可以跟其他職位的一般異動一起複選、一次送出。</li>
+        </ul>
+
+        <b style="font-size:13.5px">已經用「先下船再上船」做錯的，怎麼補救</b>
+        <ol style="margin:10px 0 16px;padding-left:20px;font-size:13.5px;line-height:2">
+          <li>進「② 船員資料庫 → ① 船員個人資料」，找到當事人，點「檢視/編輯」。</li>
+          <li>在「海上資歷」表格找到舊職級（3/O）已有下船日的那筆航次，記下它的上船日。</li>
+          <li>找到新職級（2/O）、目前在船中的那筆航次，「上船日」欄位下方有個較小的日期框（提示文字：原船晉升專用）。</li>
+          <li>把記下的原上船日填進這個小框，按「💾 儲存變更」——「在船月數」「上船日期」隨即改用正確日期重新計算，不需要刪除重辦。</li>
+        </ol>
+
+        <b style="font-size:13.5px">常見問題</b>
+        <ul style="margin:10px 0 0;padding-left:20px;font-size:13.5px;line-height:2">
+          <li><b>勾選原船晉升後可以不選目標職位嗎？</b>不行，一定要選一個空缺職位，否則送出時會提示「請選擇要晉升到的職位」。</li>
+          <li><b>可以晉升到別艘船的職位嗎？</b>不行，這個功能只處理「同一艘船、人不下船、換職位」的情況；調到別艘船一律算一般換人。</li>
+          <li><b>忘記勾選、已經用一般換人方式送出了怎麼辦？</b>照上面「怎麼補救」手動處理即可，不需要刪除重辦。</li>
+          <li><b>匯出的 Excel／PDF 會同步正確嗎？</b>會，個人 Crew Matrix 匯出、船舶「船上核對用」Excel／PDF 都已跟網頁同步。</li>
+        </ul>
       </div>
 
       <div class="panelbox" style="margin-bottom:16px">
