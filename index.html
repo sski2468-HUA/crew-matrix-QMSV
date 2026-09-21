@@ -2790,6 +2790,7 @@ function buildPersonPageHtml(person, subtitle){
    不用 jsPDF 這類套件：那些套件內建字型不支援中文，中文會變空白方框，
    要嵌入中文字型檔又會讓網站肥好幾 MB。改用瀏覽器內建列印，中文完全正常、檔案小、文字還能反白複製。 */
 function openPrintWindow(title, bodyHtml, landscape){
+  title = `${title}_${todayISO().replaceAll("-","")}`; // 瀏覽器「另存為 PDF」預設檔名取自 <title>，加上下載日期
   const html = `<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="UTF-8"><title>${esc(title)}</title>
   <style>
     @page{ size: ${landscape?"landscape":"portrait"}; margin: 12mm; }
