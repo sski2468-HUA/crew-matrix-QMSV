@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Crew Matrix 工作站 — 船員資歷管理</title>
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <style>
 /* ═════════════════════════════════════════════════════════
    設計變數 — 與《船舶檢查暨缺失管理系統》共用同一套視覺語言
@@ -1902,6 +1902,7 @@ function exportPersonMatrix(personId){
     setF(COMPUTED_ROW_IDX["Years on all types of tanker"], fs["Years on all types of tanker"]);
     setF(COMPUTED_ROW_IDX["Months on vessel this tour of duty"], fs["Months on vessel this tour of duty"]);
     setF(COMPUTED_ROW_IDX["上船日期"], fs["上船日期__formula"], "yyyy/mm/dd");
+    styleMatrixSheet(ws, 2);
     XLSX.utils.book_append_sheet(wb, ws, "Crew Matrix");
     const built=buildPersonSheetAOA(person);
     const voyWs=XLSX.utils.aoa_to_sheet(built.aoa);
@@ -2585,6 +2586,7 @@ function exportXlsxMatrix(){
       ...MATRIX_ROWS.map(k=> [k, ...cols.map(c=> c.vals? (typeof c.vals[k]==="number"? +c.vals[k].toFixed(1) : c.vals[k]) : "")])];
     const ws=XLSX.utils.aoa_to_sheet(aoa);
     ws["!cols"]=[{wch:36}, ...cols.map(()=>({wch:14}))];
+    styleMatrixSheet(ws, cols.length+1);
     const wb=XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Crew Matrix");
     XLSX.writeFile(wb, `CrewMatrix_${shipLabel(ship)}_${todayISO().replaceAll("-","")}.xlsx`);
@@ -2645,7 +2647,7 @@ document.getElementById("btnCopySubmitLink").addEventListener("click", async ()=
    ※ 用的是免費版 SheetJS，寫不出顏色/合併儲存格這類樣式，
    內容、欄位順序跟原表一致，但畫面呈現會是純資料表格，不會有黃底/邊框等美化。 */
 /* 個人資歷表（海上資歷）Excel 統一欄寬，A~M 十三欄＋N/O 兩欄「原船晉升」輔助欄，讓匯出的檔案不用再手動調整寬度 */
-const PERSON_XLSX_COLS=[{wch:6},{wch:10},{wch:8},{wch:20},{wch:14},{wch:15},{wch:15},{wch:8},{wch:8},{wch:8},{wch:8},{wch:8},{wch:8},{wch:15},{wch:15}];
+const PERSON_XLSX_COLS=[{wch:12},{wch:10},{wch:8},{wch:20},{wch:14},{wch:15},{wch:15},{wch:8},{wch:8},{wch:14},{wch:13},{wch:8},{wch:8},{wch:24},{wch:26}];
 /* 明細下方預留的空白航次列數（船上可自行補填，天數與下方統計表會自動重算） */
 const PERSON_SHEET_BUFFER_ROWS=10;
 function personTableRanks(person){
@@ -2752,6 +2754,69 @@ function fillPersonSheetDayFormulas(ws, voyages, headerRows, person){
   const rng=XLSX.utils.decode_range(ws["!ref"]);
   rng.e.r=Math.max(rng.e.r, L.noteRow-1); rng.e.c=Math.max(rng.e.c, 14);
   ws["!ref"]=XLSX.utils.encode_range(rng);
+  stylePersonSheet(ws, n, L);
+}
+
+/* ── Excel 美化（隔線／底色）：用 xlsx-js-style 才寫得出儲存格樣式 ── */
+const XL_LINE={style:"thin",color:{rgb:"A9B8C2"}};
+const XL_BORDER={top:XL_LINE,bottom:XL_LINE,left:XL_LINE,right:XL_LINE};
+const XL_NAVY="1C3A5E", XL_HEAD_LIGHT="E3EBF2", XL_INPUT="FDF3E0", XL_SUM="E3F1F3";
+function xlPaint(ws, r1, c1, r2, c2, s){
+  for(let r=r1;r<=r2;r++) for(let c=c1;c<=c2;c++){
+    const addr=XLSX.utils.encode_cell({r:r-1,c});
+    if(!ws[addr]) ws[addr]={t:"s",v:""};
+    ws[addr].s=s;
+  }
+}
+const xlS=(o={})=>({
+  border:XL_BORDER,
+  alignment:{horizontal:o.left?"left":"center",vertical:"center",wrapText:!!o.wrap},
+  ...(o.fill?{fill:{patternType:"solid",fgColor:{rgb:o.fill}}}:{}),
+  font:{name:"Microsoft JhengHei",sz:o.sz||10,bold:!!o.bold,italic:!!o.italic,color:{rgb:o.color||"15262F"}},
+});
+function stylePersonSheet(ws, n, L){
+  const head=xlS({fill:XL_NAVY,color:"FFFFFF",bold:true});
+  /* 標題 */
+  ws["A1"].s={font:{name:"Microsoft JhengHei",sz:14,bold:true,color:{rgb:XL_NAVY}}};
+  /* 基本資料（第3~5列）：標籤欄淡底粗體、內容欄加框 */
+  for(let r=3;r<=5;r++){
+    xlPaint(ws,r,0,r,10,xlS({left:true}));
+    [0,3,6,9].forEach(c=> xlPaint(ws,r,c,r,c,xlS({left:true,bold:true,fill:XL_HEAD_LIGHT})));
+  }
+  /* 航次表頭（第7~8列） */
+  xlPaint(ws,7,0,8,12,head);
+  xlPaint(ws,7,13,8,14,xlS({fill:"D5DCE1",color:"52656F",italic:true,sz:9}));
+  /* 航次資料列 */
+  if(n>0){
+    xlPaint(ws,9,0,8+n,12,xlS());
+    for(let r=9;r<=8+n;r++) xlPaint(ws,r,3,r,3,xlS({left:true}));
+    xlPaint(ws,9,13,8+n,14,xlS({color:"52656F",sz:9}));
+  }
+  /* 空白預留列：淺黃色＝可自行補填 */
+  xlPaint(ws,9+n,0,L.end,12,xlS({fill:XL_INPUT}));
+  xlPaint(ws,9+n,13,L.end,14,xlS({fill:XL_INPUT,color:"52656F",sz:9}));
+  /* 小計列 */
+  xlPaint(ws,L.totalRow,0,L.totalRow,12,xlS({bold:true,fill:XL_HEAD_LIGHT}));
+  xlPaint(ws,L.totalRow,0,L.totalRow,0,xlS({left:true,bold:true,fill:XL_HEAD_LIGHT}));
+  /* 職級×船型統計表 */
+  [[3,9],[11,11]].forEach(([a,b])=>{
+    xlPaint(ws,L.hdr1,a,L.hdr2,b,head);
+    xlPaint(ws,L.first,a,L.last,b,xlS());
+    xlPaint(ws,L.daysRow,a,L.yearsRow,b,xlS({bold:true,fill:XL_SUM}));
+  });
+  for(let r=L.first;r<=L.last;r++) xlPaint(ws,r,3,r,3,xlS({left:true,bold:true}));
+  xlPaint(ws,L.daysRow,3,L.yearsRow,3,xlS({left:true,bold:true,fill:XL_SUM}));
+  ws["A"+L.noteRow].s={font:{name:"Microsoft JhengHei",sz:9,italic:true,color:{rgb:"52656F"}}};
+}
+/* Crew Matrix 總表樣式：表頭藍底白字、全表格線、SIRE 重點年資列淡黃底 */
+function styleMatrixSheet(ws, ncols){
+  const sireRows=["Years with Operator","Years in Rank","Years on this type of tanker","Years of watchkeeping officer","Years on all types of tanker"];
+  xlPaint(ws,4,0,4,ncols-1,xlS({fill:XL_NAVY,color:"FFFFFF",bold:true,wrap:true}));
+  MATRIX_ROWS.forEach((k,i)=>{
+    const r=5+i, yellow=sireRows.includes(k);
+    xlPaint(ws,r,0,r,ncols-1,xlS({fill:yellow?XL_INPUT:undefined,wrap:true}));
+    xlPaint(ws,r,0,r,0,xlS({left:true,bold:true,fill:yellow?XL_INPUT:XL_HEAD_LIGHT}));
+  });
 }
 function exportXlsxFull(){
   const ship=State.ships.find(s=>s.id===matrixState.shipId);
@@ -2801,6 +2866,7 @@ function exportXlsxFull(){
       setF(COMPUTED_ROW_IDX["Months on vessel this tour of duty"], fs["Months on vessel this tour of duty"]);
       setF(COMPUTED_ROW_IDX["上船日期"], fs["上船日期__formula"], "yyyy/mm/dd");
     });
+    styleMatrixSheet(ws, cols.length+1);
     XLSX.utils.book_append_sheet(wb, ws, safeSheetName(ship.name));
     let noPerson=0;
     cols.forEach(c=>{
