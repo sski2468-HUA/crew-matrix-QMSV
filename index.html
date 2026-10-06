@@ -529,7 +529,7 @@ table.matrix tr.yellow td{background:var(--yellow)}
           <li>上方選單選船，下方表格會即時算出每個職位的 Crew Matrix 數字，跟原本紙本表格格式一致，黃色列是 SIRE 檢查會看的重點年資欄位。</li>
           <li><b>達標檢查</b>——表格下方會自動算出「資深甲級船員（Master+C/O 合計）」與「資淺甲級船員（2/O+3/O 合計）」是否達到公司規定的年資門檻，達標／未達標一目了然。</li>
           <li><b>匯出 Excel</b>——會下載一個Excel檔案，「Crew Matrix」分頁跟印出來的格式一樣，年資欄位都是公式，不是寫死的數字。</li>
-          <li><b>匯出船上核對用檔案</b>——更新完成後要寄給船上核對時用這個。會產生一個 Excel，第一頁是 Crew Matrix 總表，後面每一頁是該船目前每位在船船員的完整海上資歷（跟原本個人資歷表同樣的欄位、同樣的順序），船上人員可以直接核對自己完整的航次紀錄，不是只看到一個年資合計數字。<span class="hint">目前缺配的職位不會產生分頁；因為用的是免費版試算表工具，格式是純資料表格（沒有原本黃底、合併儲存格那些美化），但內容、順序完全一致。</span></li>
+          <li><b>匯出船上核對用檔案</b>——更新完成後要寄給船上核對時用這個。會產生一個 Excel，第一頁是 Crew Matrix 總表，後面每一頁是該船目前每位在船船員的完整海上資歷（跟原本個人資歷表同樣的欄位、同樣的順序），船上人員可以直接核對自己完整的航次紀錄，不是只看到一個年資合計數字。每位人員分頁下方也附有「職級×船型資歷統計表」（含計算公式，跟原本個人資歷 Excel 一樣），並預留 10 列空白航次列，船上自行補填日期與船型打 V 後，天數與統計表會自動重算。<span class="hint">目前缺配的職位不會產生分頁；因為用的是免費版試算表工具，格式是純資料表格（沒有原本黃底、合併儲存格那些美化），但內容、順序完全一致。</span></li>
           <li><b>匯出 PDF（船上核對用）</b>——跟上面那個 Excel 內容一樣（總表＋每位在船人員完整資歷），但如果船上要的是 PDF 檔（例如列印張貼、或不方便開 Excel），用這個。點下去會開一個新分頁排版好的頁面，並自動跳出瀏覽器的「列印」視窗，把「印表機」選成<b>「另存為 PDF」</b>存下來即可；如果沒有自動跳出，畫面右上角有一顆「🖨 列印／另存為 PDF」按鈕可以手動點。</li>
           <li><b>船舶／職位設定</b>——可修改船名、本船船型（影響 Years on this type of tanker 的計算），以及每個職位欄要用哪個「年資職級」計算、目前指派給誰、新增或刪除職位欄。<b style="color:var(--bad)">刪除船舶需要密碼。</b></li>
           <li><b>匯入船舶配置</b>——如果拿到新船的整艘船 Crew Matrix 總表（跟舊系統格式一樣），可以直接匯入，系統會自動讀出船名與職位結構、建立好船舶與職位欄，並依姓名自動比對船員資料庫、配對到的職位直接指派好人（配不到的需手動指派）。<span class="hint">本船船型會先預設為 Chem + Oil/Chem，請匯入後務必到「船舶／職位設定」核對修正，尤其是氣體船或船型不同的船舶。已存在同名船舶時會自動略過，不會覆蓋現有資料。</span></li>
@@ -2645,7 +2645,23 @@ document.getElementById("btnCopySubmitLink").addEventListener("click", async ()=
    ※ 用的是免費版 SheetJS，寫不出顏色/合併儲存格這類樣式，
    內容、欄位順序跟原表一致，但畫面呈現會是純資料表格，不會有黃底/邊框等美化。 */
 /* 個人資歷表（海上資歷）Excel 統一欄寬，A~M 十三欄＋N/O 兩欄「原船晉升」輔助欄，讓匯出的檔案不用再手動調整寬度 */
-const PERSON_XLSX_COLS=[{wch:6},{wch:10},{wch:8},{wch:20},{wch:14},{wch:15},{wch:15},{wch:8},{wch:6},{wch:8},{wch:6},{wch:6},{wch:6},{wch:15},{wch:15}];
+const PERSON_XLSX_COLS=[{wch:6},{wch:10},{wch:8},{wch:20},{wch:14},{wch:15},{wch:15},{wch:8},{wch:8},{wch:8},{wch:8},{wch:8},{wch:8},{wch:15},{wch:15}];
+/* 明細下方預留的空白航次列數（船上可自行補填，天數與下方統計表會自動重算） */
+const PERSON_SHEET_BUFFER_ROWS=10;
+function personTableRanks(person){
+  const rk=v=>RANK_ALIAS[String(v||"").toUpperCase()]||v;
+  const all=[rk(person.rank_now), ...person.voyages.map(v=>rk(v.rank))];
+  const hasDeck=all.some(r=>DECK.includes(r)), hasEng=all.some(r=>ENG.includes(r));
+  return [...((hasDeck||!hasEng)? DECK:[]), ...(hasEng? ENG:[])];
+}
+/* 個人明細分頁版面（列號皆為 Excel 1-based）：第9列起是航次，後面接空白預留列、小計列、職級×船型統計表 */
+function personSheetLayout(person, n){
+  const end=8+n+PERSON_SHEET_BUFFER_ROWS;
+  const ranks=personTableRanks(person);
+  const totalRow=end+1, hdr1=totalRow+2, hdr2=hdr1+1, first=hdr2+1, last=first+ranks.length-1;
+  const daysRow=last+1, yearsRow=daysRow+1, noteRow=yearsRow+2;
+  return {end, ranks, totalRow, hdr1, hdr2, first, last, daysRow, yearsRow, noteRow};
+}
 function safeSheetName(name){
   return String(name).replace(/[:\\\/\?\*\[\]]/g,"").slice(0,31) || "sheet";
 }
@@ -2669,6 +2685,18 @@ function buildPersonSheetAOA(person){
       v.tour_start? isoToDate(v.tour_start) : "", "" // 原上船日：只有「原船晉升」延續來的航次才會有值；有效上船日欄留空，寫入公式後由 Excel 自己算
     ]);
   });
+  /* 空白預留列＋小計列＋職級×船型資歷統計表（比照原本個人資歷 Excel 最下面那張表，公式在 fillPersonSheetDayFormulas 寫入） */
+  const n=voyages.length, L=personSheetLayout(person, n);
+  for(let i=0;i<PERSON_SHEET_BUFFER_ROWS;i++) aoa.push([n+i+1]);
+  aoa.push(["小計 (Total)"]);
+  aoa.push([]);
+  aoa.push(["","","","職級","化","油/化","油","氣體","其他","合計","","合計(年)"]);
+  aoa.push(["","","","Rank","Chem","Oil/Chem","Oil","Gas","Other","Total","","Years"]);
+  L.ranks.forEach(rk=> aoa.push(["","","",rk]));
+  aoa.push(["","","","合計 (Days)"]);
+  aoa.push(["","","","合計 (Years)"]);
+  aoa.push([]);
+  aoa.push(["※ 空白列可自行補填新航次（上船日期／下船日期／船型打 V），在船天數與上方統計表會自動重新計算；Cadet 不計入職級年資。"]);
   return {aoa, voyages};
 }
 /* 把「上船日期－下船日期」寫成 Excel 公式，而不是寫死的數字，讓船員自己在Excel裡也能核對計算過程。
@@ -2692,6 +2720,38 @@ function fillPersonSheetDayFormulas(ws, voyages, headerRows, person){
     ws[effOnAddr]={t:"n", f:`IF(${tourStartAddr}="",${onAddr},${tourStartAddr})`, z:"yyyy/mm/dd"};
   });
   if(person && person.join_date && ws["K3"]) ws["K3"].z="yyyy/mm/dd";
+  if(!person) return;
+
+  /* 空白預留列：補填日期後天數／有效上船日自動計算 */
+  const n=voyages.length, L=personSheetLayout(person, n);
+  const A=(r1,c)=>XLSX.utils.encode_cell({r:r1-1,c});
+  const setF=(r1,c,f,z)=>{ ws[A(r1,c)]={t:"n", f, z}; };
+  for(let r=9+n; r<=L.end; r++){
+    setF(r,7,`IF(F${r}="","",IF(G${r}="",TODAY()-F${r},G${r}-F${r}))`,"0");
+    setF(r,14,`IF(F${r}="","",IF(N${r}="",F${r},N${r}))`,"yyyy/mm/dd");
+  }
+  /* 小計列 */
+  setF(L.totalRow,7,`SUM(H9:H${L.end})`,"0");
+  ["I","J","K","L","M"].forEach((col,i)=> setF(L.totalRow,8+i,`COUNTIF(${col}9:${col}${L.end},"V")`,"0"));
+  /* 職級×船型統計表：職級 × 船型天數（SUMIFS 沿用天數欄與船型 V 標記），再換算年 */
+  const flagCols=["I","J","K","L","M"];
+  for(let r=L.first; r<=L.last; r++){
+    flagCols.forEach((fc,i)=> setF(r,4+i,`SUMIFS($H$9:$H$${L.end},$C$9:$C$${L.end},$D${r},${fc}$9:${fc}$${L.end},"V")`,"0"));
+    setF(r,9,`SUM(E${r}:I${r})`,"0");
+    setF(r,11,`J${r}/365`,"0.0");
+  }
+  for(let i=0;i<5;i++){
+    const col=["E","F","G","H","I"][i];
+    setF(L.daysRow,4+i,`SUM(${col}${L.first}:${col}${L.last})`,"0");
+    setF(L.yearsRow,4+i,`${col}${L.daysRow}/365`,"0.0");
+  }
+  setF(L.daysRow,9,`SUM(E${L.daysRow}:I${L.daysRow})`,"0");
+  setF(L.daysRow,11,`SUM(L${L.first}:L${L.last})`,"0.0");
+  setF(L.yearsRow,9,`SUM(E${L.yearsRow}:I${L.yearsRow})`,"0.0");
+  /* 確保匯出範圍涵蓋預留列與統計表 */
+  const rng=XLSX.utils.decode_range(ws["!ref"]);
+  rng.e.r=Math.max(rng.e.r, L.noteRow-1); rng.e.c=Math.max(rng.e.c, 14);
+  ws["!ref"]=XLSX.utils.encode_range(rng);
 }
 function exportXlsxFull(){
   const ship=State.ships.find(s=>s.id===matrixState.shipId);
