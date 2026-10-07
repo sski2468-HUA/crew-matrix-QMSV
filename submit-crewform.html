@@ -43,9 +43,9 @@ input:focus,select:focus{outline:2px solid var(--navy-3);outline-offset:1px}
 .onboard-row{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-2);margin-top:2px}
 .onboard-row input[type=checkbox]{width:auto}
 .cargo-row label{white-space:nowrap}
-@media(min-width:1000px){
-  .cargo-row{flex-wrap:nowrap;gap:12px}
-  .voycols,.voyrow{display:grid;grid-template-columns:128px minmax(150px,1.4fr) 138px 148px 270px 28px;gap:10px;align-items:start}
+@media(min-width:1100px){
+  .cargo-row{flex-wrap:nowrap;gap:10px}
+  .voycols,.voyrow{display:grid;grid-template-columns:118px minmax(130px,1.3fr) 132px 140px 250px minmax(130px,1fr) 24px;gap:10px;align-items:start}
   .voycols{background:var(--navy);color:#fff;border-radius:8px 8px 0 0;padding:9px 12px;font-size:12.5px;font-weight:700}
   .voyrow{border-radius:0;margin-bottom:0;border-top:none;padding:10px 12px}
   .voyrow:nth-child(even){background:#fff}
@@ -115,7 +115,7 @@ input:focus,select:focus{outline:2px solid var(--navy-3);outline-offset:1px}
         <span class="hint" style="margin-left:auto">請對照船員手冊・由舊到新依序填寫</span>
       </div>
       <div style="margin-top:12px">
-        <div class="voycols"><div>職級</div><div>船名</div><div>上船日</div><div>下船日</div><div>船型（可複選）</div><div></div></div>
+        <div class="voycols"><div>職級</div><div>船名</div><div>上船日</div><div>下船日</div><div>船型（可複選）</div><div>備註（見習請註明）</div><div></div></div>
         <div id="voyList"></div>
       </div>
       <div style="height:10px"></div>
@@ -173,16 +173,51 @@ function addVoyageRow(d){
   const onboard=d.ship_name && !d.sign_off && d.sign_on;
   div.innerHTML=`
     <div class="cell" data-l="職級"><select class="v-rank">${RANKS.map(r=>`<option value="${r}" ${d.rank===r?"selected":""}>${r} ${RANK_CN[r]}</option>`).join("")}</select></div>
-    <div class="cell" data-l="船名"><input type="text" class="v-ship" value="${escHtml(d.ship_name||"")}" placeholder="例：FPMC C Jade 或 台塑真善輪"></div>
+    <div class="cell" data-l="船名"><select class="v-shipsel" onchange="onShipSel(this.closest('.voybox'))"></select>
+      <input type="text" class="v-ship" value="${escHtml(d.ship_name||"")}" style="display:none" placeholder="自行填寫船名（他公司船舶）"></div>
     <div class="cell" data-l="上船日"><input type="date" class="v-on" value="${escHtml(d.sign_on||"")}"></div>
     <div class="cell" data-l="下船日"><input type="date" class="v-off" value="${escHtml(d.sign_off||"")}" ${onboard?"disabled":""}>
       <label class="onboard-row"><input type="checkbox" class="v-onboard" ${onboard?"checked":""} onchange="this.closest('.voybox').querySelector('.v-off').disabled=this.checked"> 目前仍在船上</label></div>
     <div class="cell full" data-l="船型（可複選）"><div class="cargo-row">
       ${TYPES.map(t=>`<label><input type="checkbox" class="v-type" value="${t}" ${(d.cargo_types||[]).includes(t)?"checked":""}>${TYPE_CN[t]}</label>`).join("")}
     </div></div>
+    <div class="cell" data-l="備註（見習身分請在此註明）"><input type="text" class="v-note" value="${escHtml(d.note||"")}" placeholder="例：見習"></div>
     <button type="button" class="rm" title="刪除這一筆" onclick="document.getElementById('${id}').remove()">✕</button>`;
   document.getElementById("voyList").appendChild(div);
+  refreshShipSelect(div, d.ship_name||"");
 }
+/* 船名下拉選單：列出系統內的公司船舶，另有「自訂」可自行填寫他公司船名 */
+let SHIPS=[];
+const SHIP_CUSTOM="__custom";
+function currentShipName(box){
+  const sel=box.querySelector(".v-shipsel");
+  return sel.value===SHIP_CUSTOM ? box.querySelector(".v-ship").value.trim() : sel.value;
+}
+function refreshShipSelect(box, name){
+  const sel=box.querySelector(".v-shipsel"), inp=box.querySelector(".v-ship");
+  sel.innerHTML=`<option value="">— 請選擇船名 —</option>`
+    + SHIPS.map(s=>`<option value="${escHtml(s.name)}">${escHtml(s.label)}</option>`).join("")
+    + `<option value="${SHIP_CUSTOM}">✎ 自訂（他公司船舶／自行填寫）</option>`;
+  const known=SHIPS.some(s=>s.name===name);
+  sel.value = !name ? "" : (known ? name : SHIP_CUSTOM);
+  if(name && !known) inp.value=name;
+  inp.style.display = sel.value===SHIP_CUSTOM ? "" : "none";
+}
+function onShipSel(box){
+  const sel=box.querySelector(".v-shipsel"), inp=box.querySelector(".v-ship");
+  inp.style.display = sel.value===SHIP_CUSTOM ? "" : "none";
+  if(sel.value===SHIP_CUSTOM) inp.focus();
+}
+(async function loadShipList(){
+  try{
+    const res=await fetch(`${CLOUD.url}/rest/v1/crew_ships?select=name,name_en`, {headers:{apikey:CLOUD.key, Authorization:"Bearer "+CLOUD.key}});
+    if(!res.ok) throw new Error(res.status);
+    const rows=await res.json();
+    SHIPS=rows.filter(r=>r.name).map(r=>({name:r.name, label:(r.name_en && r.name_en!==r.name)? `${r.name_en}（${r.name}）` : r.name}))
+      .sort((a,b)=>a.label.localeCompare(b.label,"zh-Hant"));
+    document.querySelectorAll(".voybox").forEach(box=>refreshShipSelect(box, currentShipName(box)));
+  }catch(e){ console.warn("船舶清單讀取失敗，船名請選「自訂」自行填寫", e); }
+})();
 document.getElementById("btnAddVoy").addEventListener("click", ()=>addVoyageRow());
 addVoyageRow(); addVoyageRow();
 
@@ -224,7 +259,7 @@ function collectFormData(){
   const voyages=[];
   let incomplete=0;
   document.querySelectorAll(".voybox").forEach(box=>{
-    const ship_name=box.querySelector(".v-ship").value.trim();
+    const ship_name=currentShipName(box);
     const sign_on=box.querySelector(".v-on").value;
     if(!ship_name && !sign_on && !box.querySelector(".v-off").value) return; // 完全空白的列直接略過
     if(!ship_name || !sign_on){ incomplete++; return; }
@@ -232,7 +267,7 @@ function collectFormData(){
     const sign_off=onboard? null : (box.querySelector(".v-off").value||null);
     const rank=box.querySelector(".v-rank").value;
     const cargo_types=[...box.querySelectorAll(".v-type:checked")].map(c=>c.value);
-    voyages.push({rank, ship_name, sign_on, sign_off, cargo_types, note:""});
+    voyages.push({rank, ship_name, sign_on, sign_off, cargo_types, note:box.querySelector(".v-note").value.trim()});
   });
   return {person, voyages, incomplete};
 }
@@ -246,8 +281,8 @@ function renderConfirmBody(person, voyages){
   const fieldsHtml = fields.map(([k,v])=>`<div><b>${escHtml(k)}</b>${escHtml(v||"（未填）")}</div>`).join("");
   const fmt=s=> s? String(s).replaceAll("-","/") : "";
   const voyHtml = voyages.length
-    ? `<div style="overflow-x:auto"><table class="voy-table"><thead><tr><th>#</th><th>職級</th><th>船名</th><th>上船日</th><th>下船日</th><th>船型</th></tr></thead><tbody>${
-        voyages.map((v,i)=>`<tr><td>${i+1}</td><td>${escHtml(v.rank)} ${escHtml(RANK_CN[v.rank]||"")}</td><td>${escHtml(v.ship_name)}</td><td>${fmt(v.sign_on)}</td><td>${v.sign_off? fmt(v.sign_off) : "（在船中）"}</td><td>${v.cargo_types.length? v.cargo_types.map(t=>TYPE_CN[t]).join("+") : "<span style='color:#c0392b'>（未選）</span>"}</td></tr>`).join("")
+    ? `<div style="overflow-x:auto"><table class="voy-table"><thead><tr><th>#</th><th>職級</th><th>船名</th><th>上船日</th><th>下船日</th><th>船型</th><th>備註</th></tr></thead><tbody>${
+        voyages.map((v,i)=>`<tr><td>${i+1}</td><td>${escHtml(v.rank)} ${escHtml(RANK_CN[v.rank]||"")}</td><td>${escHtml(v.ship_name)}</td><td>${fmt(v.sign_on)}</td><td>${v.sign_off? fmt(v.sign_off) : "（在船中）"}</td><td>${v.cargo_types.length? v.cargo_types.map(t=>TYPE_CN[t]).join("+") : "<span style='color:#c0392b'>（未選）</span>"}</td><td>${escHtml(v.note||"")}</td></tr>`).join("")
       }</tbody></table></div>`
     : `<p class="hint">目前沒有填寫任何航次資料。</p>`;
   document.getElementById("confirmBody").innerHTML = `

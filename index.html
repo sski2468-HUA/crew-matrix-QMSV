@@ -3281,8 +3281,8 @@ function reviewSubmission(id){
     <div style="margin-top:18px">
       <b style="font-size:13px">海上資歷（${voyages.length} 筆）</b>
       <div class="tblwrap" style="margin-top:8px;max-height:none">
-        <table class="tbl"><thead><tr><th>職級</th><th>船名</th><th>上船日</th><th>下船日</th><th>船型</th></tr></thead>
-          <tbody>${voyages.map(v=>`<tr><td>${esc(v.rank||"")}</td><td>${esc(v.ship_name)}</td><td class="mono">${disp(v.sign_on)}</td><td class="mono">${v.sign_off?disp(v.sign_off):"(在船中)"}</td><td>${(v.cargo_types||[]).join("+")}</td></tr>`).join("")}</tbody>
+        <table class="tbl"><thead><tr><th>職級</th><th>船名</th><th>上船日</th><th>下船日</th><th>船型</th><th>備註</th></tr></thead>
+          <tbody>${voyages.map(v=>`<tr><td>${esc(v.rank||"")}</td><td>${esc(v.ship_name)}</td><td class="mono">${disp(v.sign_on)}</td><td class="mono">${v.sign_off?disp(v.sign_off):"(在船中)"}</td><td>${(v.cargo_types||[]).join("+")}</td><td>${esc(v.note||"")}</td></tr>`).join("")}</tbody>
         </table>
       </div>
     </div>
