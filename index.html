@@ -3022,10 +3022,11 @@ function renderShipConfig(){
   <div class="panelbox" style="margin-bottom:16px">
     <div style="margin-bottom:10px"><b style="font-size:14px">⚙ 職位設定 — ${esc(shipLabel(ship))}</b></div>
     <table class="tbl">
-      <thead><tr><th>職位（Matrix 欄標題）</th><th>年資職級</th><th>指派船員</th><th></th></tr></thead>
+      <thead><tr><th style="width:84px">順序</th><th>職位（Matrix 欄標題）</th><th>年資職級</th><th>指派船員</th><th></th></tr></thead>
       <tbody>
         ${ship.posts.map(po=>`
         <tr>
+          <td style="white-space:nowrap"><button class="btn sm" title="往上移" onclick="movePostRow(this,-1)">▲</button> <button class="btn sm" title="往下移" onclick="movePostRow(this,1)">▼</button></td>
           <td><input type="text" class="cfg-label" data-post="${po.id}" value="${esc(po.post_label)}" style="width:140px"></td>
           <td><select class="cfg-rank" data-post="${po.id}">
             ${[...DECK,...ENG].map(r=>`<option value="${r}" ${po.rank===r?"selected":""}>${r} ${RANK_CN[r]}</option>`).join("")}
@@ -3044,18 +3045,26 @@ function renderShipConfig(){
       <button class="btn sm" onclick="addPost('${ship.id}')">＋ 新增職位欄</button>
       <button class="btn sm primary" onclick="savePostRows('${ship.id}')">💾 儲存職位設定</button>
     </div>
-    <p class="hint" style="margin-top:10px">船名／代碼／英文船名／本船船型請到「🔐 資料管理 → 🚢 船舶基本資料設定」調整。</p>
+    <p class="hint" style="margin-top:10px">用 ▲▼ 調整職位欄的左右順序（Crew Matrix 表格、匯出 Excel／PDF 都依這個順序），調好按「💾 儲存職位設定」才會生效。</p>
+    <p class="hint" style="margin-top:4px">船名／代碼／英文船名／本船船型請到「🔐 資料管理 → 🚢 船舶基本資料設定」調整。</p>
   </div>`;
+}
+function movePostRow(btn, dir){
+  const tr=btn.closest("tr");
+  const other= dir<0 ? tr.previousElementSibling : tr.nextElementSibling;
+  if(!other) return;
+  if(dir<0) tr.parentElement.insertBefore(tr, other);
+  else tr.parentElement.insertBefore(other, tr);
 }
 async function savePostRows(shipId){
   const rows=[...document.querySelectorAll("#shipConfigHost tbody tr")];
   try{
-    for(const tr of rows){
+    for(const [i,tr] of rows.entries()){
       const postId=tr.querySelector(".cfg-label").dataset.post;
       const post_label=tr.querySelector(".cfg-label").value.trim();
       const rank=tr.querySelector(".cfg-rank").value;
       const person_id=tr.querySelector(".cfg-person-value").value||null;
-      await sb("PATCH","crew_ship_posts",{query:`?id=eq.${postId}`, body:{post_label, rank, person_id}});
+      await sb("PATCH","crew_ship_posts",{query:`?id=eq.${postId}`, body:{post_label, rank, person_id, sort_order:i}});
     }
     await loadAll(); renderMatrixTab();
     notify("已儲存職位設定");
