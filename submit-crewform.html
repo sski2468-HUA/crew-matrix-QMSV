@@ -16,7 +16,7 @@
 }
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--paper);font-family:var(--sans);color:var(--ink)}
-.wrap{max-width:980px;margin:0 auto;padding:0 0 60px}
+.wrap{max-width:1100px;margin:0 auto;padding:0 0 60px}
 .notice{margin:14px;padding:13px 16px;background:#fdf1e4;border:1px solid #f3d3ab;border-left:4px solid var(--signal);border-radius:10px;font-size:13.5px;line-height:1.75;color:#5a3a12}
 .notice b{color:var(--signal-d)}
 .fixbanner{display:none;margin:14px;padding:13px 16px;background:var(--bad-l);border:1px solid #e3b8b1;border-left:4px solid var(--bad);border-radius:10px;font-size:13.5px;line-height:1.75;color:#6b241c}
@@ -42,8 +42,10 @@ input:focus,select:focus{outline:2px solid var(--navy-3);outline-offset:1px}
 .cargo-row input[type=checkbox]{width:auto}
 .onboard-row{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-2);margin-top:2px}
 .onboard-row input[type=checkbox]{width:auto}
-@media(min-width:900px){
-  .voycols,.voyrow{display:grid;grid-template-columns:128px minmax(140px,1.5fr) 140px 150px minmax(180px,1.4fr) 28px;gap:10px;align-items:start}
+.cargo-row label{white-space:nowrap}
+@media(min-width:1000px){
+  .cargo-row{flex-wrap:nowrap;gap:12px}
+  .voycols,.voyrow{display:grid;grid-template-columns:128px minmax(150px,1.4fr) 138px 148px 270px 28px;gap:10px;align-items:start}
   .voycols{background:var(--navy);color:#fff;border-radius:8px 8px 0 0;padding:9px 12px;font-size:12.5px;font-weight:700}
   .voyrow{border-radius:0;margin-bottom:0;border-top:none;padding:10px 12px}
   .voyrow:nth-child(even){background:#fff}
@@ -170,7 +172,6 @@ function addVoyageRow(d){
   div.id=id;
   const onboard=d.ship_name && !d.sign_off && d.sign_on;
   div.innerHTML=`
-    <button type="button" class="rm" title="刪除這一筆" onclick="document.getElementById('${id}').remove()">✕</button>
     <div class="cell" data-l="職級"><select class="v-rank">${RANKS.map(r=>`<option value="${r}" ${d.rank===r?"selected":""}>${r} ${RANK_CN[r]}</option>`).join("")}</select></div>
     <div class="cell" data-l="船名"><input type="text" class="v-ship" value="${escHtml(d.ship_name||"")}" placeholder="例：FPMC C Jade 或 台塑真善輪"></div>
     <div class="cell" data-l="上船日"><input type="date" class="v-on" value="${escHtml(d.sign_on||"")}"></div>
@@ -178,7 +179,8 @@ function addVoyageRow(d){
       <label class="onboard-row"><input type="checkbox" class="v-onboard" ${onboard?"checked":""} onchange="this.closest('.voybox').querySelector('.v-off').disabled=this.checked"> 目前仍在船上</label></div>
     <div class="cell full" data-l="船型（可複選）"><div class="cargo-row">
       ${TYPES.map(t=>`<label><input type="checkbox" class="v-type" value="${t}" ${(d.cargo_types||[]).includes(t)?"checked":""}>${TYPE_CN[t]}</label>`).join("")}
-    </div></div>`;
+    </div></div>
+    <button type="button" class="rm" title="刪除這一筆" onclick="document.getElementById('${id}').remove()">✕</button>`;
   document.getElementById("voyList").appendChild(div);
 }
 document.getElementById("btnAddVoy").addEventListener("click", ()=>addVoyageRow());
