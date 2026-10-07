@@ -89,15 +89,20 @@ table.vt td.days{font-family:Consolas,Menlo,monospace;text-align:center;padding-
         <label>姓名（中文）<input type="text" id="f-name" required></label>
         <label>英文姓名<input type="text" id="f-name_en" placeholder="例：WANG XIAO MING"></label>
         <label>勞務公司<input type="text" id="f-manning"></label>
-        <label>現職<input type="text" id="f-rank" placeholder="例：3/O"></label>
-        <label>國籍<input type="text" id="f-nat" placeholder="例：ROC"></label>
+        <label>現職<select id="f-rank"></select>
+          <input type="text" id="f-rank-other" style="display:none;margin-top:5px" placeholder="請自行填寫現職（例：AB）"></label>
+        <label>見習職務（A.）<select id="f-trainee"></select>
+          <input type="text" id="f-trainee-other" style="display:none;margin-top:5px" placeholder="請自行填寫見習職務"></label>
+        <label>國籍<select id="f-nat"></select>
+          <input type="text" id="f-nat-other" style="display:none;margin-top:5px" placeholder="請自行填寫國籍"></label>
         <label>進公司日<input type="date" id="f-join"></label>
-        <label>證書種類<input type="text" id="f-coc" placeholder="例：3/O"></label>
-        <label>發證國<input type="text" id="f-issuing" placeholder="例：ROC"></label>
-        <label>Tanker 證書<input type="text" id="f-tanker" placeholder="例：Oil/Chem"></label>
-        <label>STCW V<input type="text" id="f-stcw" placeholder="例：Para 2"></label>
-        <label>電台證書<input type="text" id="f-radio" placeholder="例：GOC"></label>
-        <label>英語能力<input type="text" id="f-english" placeholder="例：GOOD"></label>
+        <label>證書種類<select id="f-coc"></select></label>
+        <label>發證國<select id="f-issuing"></select>
+          <input type="text" id="f-issuing-other" style="display:none;margin-top:5px" placeholder="請自行填寫發證國"></label>
+        <label>Tanker 證書<select id="f-tanker"></select></label>
+        <label style="grid-column:span 2">STCW V para 1 or 2 for current cargo<input type="text" id="f-stcw" value="Para 2" placeholder="例：Para 2"></label>
+        <label>無線電人員資格 (Radio qualification)<select id="f-radio"></select></label>
+        <label>英語能力<select id="f-english"></select></label>
       </div>
     </div>
 
@@ -108,7 +113,7 @@ table.vt td.days{font-family:Consolas,Menlo,monospace;text-align:center;padding-
       </div>
       <div class="tblwrap" style="margin-top:12px">
         <table class="vt">
-          <thead><tr><th style="width:120px">職級</th><th style="width:260px">船名</th><th style="width:140px">上船日</th><th style="width:175px">下船日</th><th style="width:56px;text-align:center">天數</th><th>船型（可複選）</th><th style="width:170px">備註（見習請註明）</th><th style="width:44px"></th></tr></thead>
+          <thead><tr><th style="width:120px">職級</th><th style="width:260px">船名</th><th style="width:140px">上船日</th><th style="width:175px">下船日</th><th style="width:56px;text-align:center">天數</th><th>船型（可複選）</th><th style="width:230px">備註（若為見習可於備註欄填寫）</th><th style="width:44px"></th></tr></thead>
           <tbody id="voyList"></tbody>
         </table>
       </div>
@@ -154,6 +159,56 @@ const TYPES=["Chem","Oil/Chem","Oil","Gas","Other"];
 const TYPE_CN={Chem:"化","Oil/Chem":"油/化",Oil:"油",Gas:"氣體",Other:"其他"};
 const RANKS=["CAPT.","C/O","2/O","3/O","C/E","2/E","3/E","4/E","Cadet"];
 const RANK_CN={"CAPT.":"船長","C/O":"大副","2/O":"二副","3/O":"三副","C/E":"輪機長","2/E":"大管","3/E":"二管","4/E":"三管",Cadet:"實習生"};
+
+/* 基本資料下拉選單：選項與 OCIMF 網站 Crew Matrix 編輯畫面一致 */
+const FIELD_OPTIONS={
+  "f-coc":["Master II/2","Master II/3","Chief Mate II/2","OOW (Deck) II/1","OOW (Deck) II/3","Chief Eng III/2","Chief Eng III/3","Second Eng III/2","Second Eng III/3","OOW (Eng) III/1","Electro Technical Officer III/6","None","N/A","Offshore Crane Operator - Stage 1","Offshore Crane Operator - Stage 2","Offshore Crane Operator - Stage 3","Unknown"],
+  "f-issuing":["CHINA","Taiwan"],
+  "f-radio":["Yes","No","N/A"],
+  "f-nat":["Chinese","Taiwanese"],
+  "f-tanker":["Oil","Chemical","Gas","Oil and Gas","Oil and Chemical","Gas and Chemical","Oil, Chemical and Gas","None","N/A"],
+  "f-english":["Good","Fair","Poor"],
+};
+/* 有「其他（自填）」選項的欄位：發證國、國籍 */
+const FIELD_OTHER="__other";
+const OTHER_FIELDS={"f-issuing":"f-issuing-other","f-nat":"f-nat-other","f-rank":"f-rank-other","f-trainee":"f-trainee-other"};
+const SYS_RANKS=["CAPT.","C/O","2/O","3/O","C/E","2/E","3/E","4/E"];
+FIELD_OPTIONS["f-rank"]=SYS_RANKS;
+FIELD_OPTIONS["f-trainee"]=SYS_RANKS.map(r=>"A."+r);
+function onOtherChange(id){
+  document.getElementById(OTHER_FIELDS[id]).style.display = document.getElementById(id).value===FIELD_OTHER ? "" : "none";
+}
+function fieldValue(id){
+  return OTHER_FIELDS[id] && val(id)===FIELD_OTHER ? val(OTHER_FIELDS[id]) : val(id);
+}
+function setFieldValue(id, v){
+  const el=document.getElementById(id);
+  if(OTHER_FIELDS[id] && v && !FIELD_OPTIONS[id].includes(v)){
+    el.value=FIELD_OTHER; document.getElementById(OTHER_FIELDS[id]).value=v; onOtherChange(id); return;
+  }
+  if(el.tagName==="SELECT" && v && ![...el.options].some(o=>o.value===v)) el.add(new Option(v, v));
+  el.value=v||"";
+  if(OTHER_FIELDS[id]) onOtherChange(id);
+}
+for(const [id,opts] of Object.entries(FIELD_OPTIONS)){
+  const el=document.getElementById(id);
+  el.innerHTML=`<option value="">Please select...</option>`+opts.map(o=>`<option value="${escHtml(o)}">${escHtml(o)}</option>`).join("")
+    + (OTHER_FIELDS[id] ? `<option value="${FIELD_OTHER}">其他（自填）</option>` : "");
+  if(OTHER_FIELDS[id]) el.addEventListener("change", ()=>onOtherChange(id));
+}
+document.getElementById("f-english").value="Good"; // 英語能力預設 Good
+/* 現職／見習職務：依系統年資職級；見習職務＝職級前加 A. */
+document.getElementById("f-rank").innerHTML=`<option value="">Please select...</option>`+SYS_RANKS.map(r=>`<option value="${r}">${r} ${RANK_CN[r]}</option>`).join("")+`<option value="${FIELD_OTHER}">其他（自填）</option>`;
+document.getElementById("f-trainee").innerHTML=`<option value="">（無）</option>`+SYS_RANKS.map(r=>`<option value="A.${r}">A.${r} 見習${RANK_CN[r]}</option>`).join("")+`<option value="${FIELD_OTHER}">其他（自填）</option>`;
+/* 無線電人員資格：證書種類為甲板高級船員＝預設 Yes，輪機＝預設 N/A；選了之後仍可自行調整 */
+let radioTouched=false;
+document.getElementById("f-radio").addEventListener("change", e=>{ if(e.isTrusted) radioTouched=true; });
+document.getElementById("f-coc").addEventListener("change", e=>{
+  if(radioTouched) return;
+  const v=e.target.value;
+  if(/^(Master|Chief Mate|OOW \(Deck\))/.test(v)) document.getElementById("f-radio").value="Yes";
+  else if(/^(Chief Eng|Second Eng|OOW \(Eng\))/.test(v)) document.getElementById("f-radio").value="N/A";
+});
 
 let voyCount=0;
 function addVoyageRow(d){
@@ -234,8 +289,8 @@ addVoyageRow(); addVoyageRow();
   try{
     const data=JSON.parse(decodeURIComponent(escape(atob(m[1]))));
     const p=data.person||{};
-    const map={"f-name":"name","f-name_en":"name_en","f-manning":"manning_agency","f-rank":"rank_now","f-nat":"nationality","f-join":"join_date","f-coc":"coc","f-issuing":"issuing_country","f-tanker":"tanker_cert","f-stcw":"stcw","f-radio":"radio","f-english":"english"};
-    for(const [id,k] of Object.entries(map)) document.getElementById(id).value=p[k]||"";
+    const map={"f-name":"name","f-name_en":"name_en","f-manning":"manning_agency","f-rank":"rank_now","f-trainee":"rank_trainee","f-nat":"nationality","f-join":"join_date","f-coc":"coc","f-issuing":"issuing_country","f-tanker":"tanker_cert","f-stcw":"stcw","f-radio":"radio","f-english":"english"};
+    for(const [id,k] of Object.entries(map)) setFieldValue(id, p[k]||"");
     document.getElementById("voyList").innerHTML="";
     (data.voyages||[]).forEach(v=>addVoyageRow(v));
     if(!(data.voyages||[]).length){ addVoyageRow(); addVoyageRow(); }
@@ -258,10 +313,11 @@ function val(id){ return document.getElementById(id).value.trim(); }
 function collectFormData(){
   const person={
     name: val("f-name"), name_en: val("f-name_en"), manning_agency: val("f-manning"),
-    rank_now: val("f-rank"), nationality: val("f-nat"), join_date: val("f-join")||null,
-    coc: val("f-coc"), issuing_country: val("f-issuing"), tanker_cert: val("f-tanker"),
+    rank_now: fieldValue("f-rank"), nationality: fieldValue("f-nat"), join_date: val("f-join")||null,
+    coc: val("f-coc"), issuing_country: fieldValue("f-issuing"), tanker_cert: val("f-tanker"),
     stcw: val("f-stcw"), radio: val("f-radio"), english: val("f-english"),
   };
+  if(fieldValue("f-trainee")) person.rank_trainee=fieldValue("f-trainee"); // 沒填就不送出這個欄位
   const voyages=[];
   let incomplete=0;
   document.querySelectorAll(".voybox").forEach(box=>{
@@ -281,9 +337,9 @@ function collectFormData(){
 function escHtml(s){ return String(s??"").replace(/[&<>"']/g, c=> ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 
 function renderConfirmBody(person, voyages){
-  const fields=[["姓名",person.name],["英文姓名",person.name_en],["勞務公司",person.manning_agency],["現職",person.rank_now],
+  const fields=[["姓名",person.name],["英文姓名",person.name_en],["勞務公司",person.manning_agency],["現職",person.rank_now],["見習職務",person.rank_trainee],
     ["國籍",person.nationality],["進公司日",person.join_date],["證書種類",person.coc],["發證國",person.issuing_country],
-    ["Tanker 證書",person.tanker_cert],["STCW V",person.stcw],["電台證書",person.radio],["英語能力",person.english]];
+    ["Tanker 證書",person.tanker_cert],["STCW V",person.stcw],["無線電人員資格",person.radio],["英語能力",person.english]];
   const fieldsHtml = fields.map(([k,v])=>`<div><b>${escHtml(k)}</b>${escHtml(v||"（未填）")}</div>`).join("");
   const fmt=s=> s? String(s).replaceAll("-","/") : "";
   const voyHtml = voyages.length

@@ -360,6 +360,7 @@ table.matrix tr.yellow td{background:var(--yellow)}
                 <th style="width:34px"><input type="checkbox" id="rosterSelectAll"></th>
                 <th class="sortable" data-sort="name">姓名<span class="sortarrow"></span></th>
                 <th class="sortable" data-sort="rank">現職<span class="sortarrow"></span></th>
+                <th class="sortable" data-sort="trainee">見習職務<span class="sortarrow"></span></th>
                 <th class="sortable" data-sort="status">狀態<span class="sortarrow"></span></th>
                 <th class="sortable" data-sort="ship">目前/最後船名<span class="sortarrow"></span></th>
                 <th class="sortable" data-sort="date">上船日/下船日<span class="sortarrow"></span></th>
@@ -1261,6 +1262,7 @@ function rosterSortKey(r, col){
   switch(col){
     case "name": return r.p.name||"";
     case "rank": return r.p.rank_now||"";
+    case "trainee": return r.p.rank_trainee||"";
     case "status": return r.cur? 0 : 1;
     case "ship": return (r.cur? r.cur.ship_name : (r.last?r.last.ship_name:""))||"";
     case "date": return r.cur? r.cur.sign_on : (r.last? (r.last.sign_off||r.last.sign_on) : "");
@@ -1273,7 +1275,7 @@ function renderRoster(){
   const q=(document.getElementById("rosterSearch").value||"").trim().toLowerCase();
   const today=todayISO();
   let rows=[...State.persons.values()]
-    .filter(p=> !q || p.name.toLowerCase().includes(q) || (p.name_en||"").toLowerCase().includes(q) || (p.rank_now||"").toLowerCase().includes(q) || (p.manning_agency||"").toLowerCase().includes(q))
+    .filter(p=> !q || p.name.toLowerCase().includes(q) || (p.name_en||"").toLowerCase().includes(q) || (p.rank_now||"").toLowerCase().includes(q) || (p.rank_trainee||"").toLowerCase().includes(q) || (p.manning_agency||"").toLowerCase().includes(q))
     .map(p=>{
       const cur=p.voyages.find(v=>!v.sign_off);
       const last=p.voyages.reduce((a,v)=> (!a||v.sign_on>a.sign_on)? v:a, null);
@@ -1307,7 +1309,7 @@ function renderRoster(){
   document.getElementById("rosterSelectAll").checked=false;
   updateBulkDeleteBar();
   if(rows.length===0){
-    body.innerHTML = `<tr><td colspan="9" class="hint" style="text-align:center;padding:30px">${State.persons.size===0? "資料庫是空的——把個人資歷 Excel 檔拖到上方即可開始。" : "沒有符合篩選條件的船員。"}</td></tr>`;
+    body.innerHTML = `<tr><td colspan="10" class="hint" style="text-align:center;padding:30px">${State.persons.size===0? "資料庫是空的——把個人資歷 Excel 檔拖到上方即可開始。" : "沒有符合篩選條件的船員。"}</td></tr>`;
     return;
   }
   body.innerHTML = rows.map(({p,cur,last,yrs})=> `
@@ -1315,6 +1317,7 @@ function renderRoster(){
       <td data-label=""><input type="checkbox" class="roster-chk" value="${p.id}" onchange="updateBulkDeleteBar()"></td>
       <td data-label="姓名"><b>${esc(p.name)}</b><div class="hint" style="font-size:11px">${esc(p.name_en||"")}${p.manning_agency? " · "+esc(p.manning_agency) : ""}</div></td>
       <td data-label="現職">${esc(p.rank_now||"—")}</td>
+      <td data-label="見習職務">${esc(p.rank_trainee||"—")}</td>
       <td data-label="狀態">${cur? '<span class="tag green">在船</span>' : '<span class="tag grey">休假</span>'}</td>
       <td data-label="目前/最後船名">${esc(cur? cur.ship_name : (last?last.ship_name:"—"))}</td>
       <td data-label="上船日/下船日" class="mono">${cur? disp(cur.sign_on) : (last? disp(last.sign_off||last.sign_on) : "—")}</td>
@@ -1737,7 +1740,7 @@ document.getElementById("btnAddPerson").addEventListener("click", async ()=>{
 document.getElementById("btnExportBackup").addEventListener("click", exportBackupFile);
 function exportBackupFile(){
   try{
-    const info=[...State.persons.values()].map(p=>({姓名:p.name,英文名:p.name_en,勞務公司:p.manning_agency,現職:p.rank_now,國籍:p.nationality,證書:p.coc,發證國:p.issuing_country,"Tanker cert":p.tanker_cert,STCW:p.stcw,電台:p.radio,英語:p.english,進公司日:disp(p.join_date)}));
+    const info=[...State.persons.values()].map(p=>({姓名:p.name,英文名:p.name_en,勞務公司:p.manning_agency,現職:p.rank_now,見習職務:p.rank_trainee,國籍:p.nationality,證書:p.coc,發證國:p.issuing_country,"Tanker cert":p.tanker_cert,STCW:p.stcw,電台:p.radio,英語:p.english,進公司日:disp(p.join_date)}));
     const voy=[];
     for(const p of State.persons.values()) for(const v of p.voyages)
       voy.push({姓名:p.name,職級:v.rank||"",船名:v.ship_name,上船日:disp(v.sign_on),下船日:v.sign_off?disp(v.sign_off):"(在船中)",船型:(v.cargo_types||[]).join("+"),備註:v.note||""});
@@ -1964,6 +1967,30 @@ function openPersonExportMenu(e, personId){
 document.addEventListener("click", closePersonExportMenu);
 document.addEventListener("scroll", closePersonExportMenu, true);
 
+/* 下拉選單＋「其他（自填）」：選項以外的值（含舊資料）會落到「其他（自填）」並保留原值 */
+function selectWithOtherHtml(id, opts, cur, blankLabel){
+  cur=String(cur||"").trim();
+  const isOther=cur && !opts.some(o=>o[0]===cur);
+  return `<select id="${id}" onchange="document.getElementById('${id}-other').style.display=this.value==='__other'?'':'none'">
+      <option value="">${esc(blankLabel)}</option>
+      ${opts.map(([v,l])=>`<option value="${esc(v)}" ${cur===v?"selected":""}>${esc(l)}</option>`).join("")}
+      <option value="__other" ${isOther?"selected":""}>其他（自填）</option>
+    </select>
+    <input type="text" id="${id}-other" value="${isOther?esc(cur):""}" placeholder="請自行填寫" style="${isOther?"":"display:none;"}margin-top:5px">`;
+}
+function selectWithOtherValue(id){
+  const v=document.getElementById(id).value;
+  return v==="__other" ? document.getElementById(id+"-other").value.trim() : v;
+}
+/* 現職／見習職務：選項依系統年資職級（見習職務＝職級前加 A.，例如 A.CAPT.、A.2/E）；現職若是 AB 等非職級可選「其他（自填）」 */
+function rankFieldHtml(id, cur, trainee){
+  const ranks=[...DECK,...ENG];
+  let c=String(cur||"").trim();
+  if(!trainee && c){ const n=RANK_ALIAS[c.toUpperCase()]; if(n && ranks.includes(n)) c=n; }
+  return selectWithOtherHtml(id, ranks.map(r=>[trainee?"A."+r:r, `${trainee?"A."+r:r} ${RANK_CN[r]||""}`]), c, trainee?"（無）":"（未填）");
+}
+const NATIONALITY_OPTIONS=[["Chinese","Chinese"],["Taiwanese","Taiwanese"]];
+const ISSUING_OPTIONS=[["CHINA","CHINA"],["Taiwan","Taiwan"]];
 /* ── 個人編輯視圖（整頁切換，不用彈出視窗）── */
 function refreshFleetShipsDatalist(){
   const dl=document.getElementById("fleetShipsList");
@@ -1999,13 +2026,14 @@ function openPersonEdit(personId){
         <label class="field">姓名<input type="text" id="pf-name" value="${esc(p.name)}"></label>
         <label class="field">英文姓名<input type="text" id="pf-name_en" value="${esc(p.name_en||"")}"></label>
         <label class="field">勞務公司<input type="text" id="pf-manning_agency" value="${esc(p.manning_agency||"")}"></label>
-        <label class="field">現職<input type="text" id="pf-rank_now" value="${esc(p.rank_now||"")}"></label>
-        <label class="field">國籍<input type="text" id="pf-nationality" value="${esc(p.nationality||"")}"></label>
+        <label class="field">現職${rankFieldHtml("pf-rank_now",p.rank_now,false)}</label>
+        <label class="field">見習職務（A.）${rankFieldHtml("pf-rank_trainee",p.rank_trainee,true)}</label>
+        <label class="field">國籍${selectWithOtherHtml("pf-nationality",NATIONALITY_OPTIONS,p.nationality,"（未填）")}</label>
         <label class="field">進公司日<input type="date" id="pf-join_date" value="${p.join_date||""}"></label>
         <label class="field">證書種類<input type="text" id="pf-coc" value="${esc(p.coc||"")}"></label>
-        <label class="field">發證國<input type="text" id="pf-issuing_country" value="${esc(p.issuing_country||"")}"></label>
+        <label class="field">發證國${selectWithOtherHtml("pf-issuing_country",ISSUING_OPTIONS,p.issuing_country,"（未填）")}</label>
         <label class="field">Tanker cert<input type="text" id="pf-tanker_cert" value="${esc(p.tanker_cert||"")}"></label>
-        <label class="field">STCW V<input type="text" id="pf-stcw" value="${esc(p.stcw||"")}"></label>
+        <label class="field" style="grid-column:span 2">STCW V para 1 or 2 for current cargo<input type="text" id="pf-stcw" value="${esc(p.stcw||"Para 2")}"></label>
         <label class="field">電台證書<input type="text" id="pf-radio" value="${esc(p.radio||"")}"></label>
         <label class="field">英語能力<input type="text" id="pf-english" value="${esc(p.english||"")}"></label>
       </div>
@@ -2125,12 +2153,14 @@ function backToRosterList(){
 async function savePersonDrawer(personId){
   const val=id=>document.getElementById(id).value.trim();
   const person={
-    name: val("pf-name"), name_en: val("pf-name_en"), rank_now: val("pf-rank_now"),
-    nationality: val("pf-nationality"), join_date: val("pf-join_date")||null,
-    coc: val("pf-coc"), issuing_country: val("pf-issuing_country"), tanker_cert: val("pf-tanker_cert"),
+    name: val("pf-name"), name_en: val("pf-name_en"), rank_now: selectWithOtherValue("pf-rank_now"),
+    nationality: selectWithOtherValue("pf-nationality"), join_date: val("pf-join_date")||null,
+    coc: val("pf-coc"), issuing_country: selectWithOtherValue("pf-issuing_country"), tanker_cert: val("pf-tanker_cert"),
     stcw: val("pf-stcw"), radio: val("pf-radio"), english: val("pf-english"),
     manning_agency: val("pf-manning_agency"),
   };
+  { const cur=State.persons.get(personId), tv=selectWithOtherValue("pf-rank_trainee");
+    if(tv || (cur && "rank_trainee" in cur)) person.rank_trainee=tv||null; } // 資料表尚未新增 rank_trainee 欄位時不送出，避免儲存失敗
   if(!person.name){ notify("姓名不可空白","err"); return; }
   const voyages=[...document.querySelectorAll("#voyageBody tr")].map(tr=>{
     const rank=tr.querySelector(".v-rank").value||null;
@@ -2909,7 +2939,7 @@ function logoHeaderHtml(){
 }
 function buildPersonPageHtml(person, subtitle){
   const today=todayISO();
-  const fields=[["姓名",person.name],["英文姓名",person.name_en],["勞務公司",person.manning_agency],["現職",person.rank_now],
+  const fields=[["姓名",person.name],["英文姓名",person.name_en],["勞務公司",person.manning_agency],["現職",person.rank_now],["見習職務",person.rank_trainee],
     ["國籍",person.nationality],["進公司日",disp(person.join_date)],["證書種類",person.coc],["發證國",person.issuing_country],
     ["Tanker cert",person.tanker_cert],["STCW V",person.stcw],["電台證書",person.radio],["英語能力",person.english]];
   const voyages=[...person.voyages].sort((a,b)=>(a.sign_on||"").localeCompare(b.sign_on||""));
@@ -3267,7 +3297,7 @@ function reviewSubmission(id){
   const host=document.createElement("div");
   host.id="submissionReviewHost";
   host.style.cssText="position:fixed;inset:0;background:rgba(17,28,40,.5);z-index:200;display:flex;justify-content:center;align-items:flex-start;padding:30px 16px;overflow:auto";
-  const fields=[["姓名",person.name],["英文姓名",person.name_en],["勞務公司",person.manning_agency],["現職",person.rank_now],
+  const fields=[["姓名",person.name],["英文姓名",person.name_en],["勞務公司",person.manning_agency],["現職",person.rank_now],["見習職務",person.rank_trainee],
     ["國籍",person.nationality],["進公司日",disp(person.join_date)],["證書種類",person.coc],["發證國",person.issuing_country],
     ["Tanker cert",person.tanker_cert],["STCW V",person.stcw],["電台證書",person.radio],["英語能力",person.english]];
   host.innerHTML=`<div style="background:#fff;border-radius:10px;max-width:760px;width:100%;padding:22px;margin-bottom:40px">
