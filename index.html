@@ -280,6 +280,21 @@ table.matrix tr.yellow td{background:var(--yellow)}
               <tbody id="submissionBody"></tbody>
             </table>
           </div>
+          <div style="display:flex;align-items:center;gap:10px;margin:22px 0 8px;flex-wrap:wrap">
+            <b style="font-size:14px">📋 已處理紀錄</b>
+            <div class="segbtn" id="submissionDoneSeg">
+              <button type="button" class="on" data-v="">全部</button>
+              <button type="button" data-v="approved">已匯入</button>
+              <button type="button" data-v="rejected">已拒絕</button>
+            </div>
+            <span class="hint">不小心按到拒絕時，可在這裡「↩ 重新匯入」，或複製修正連結請船上重新調整後再送出。</span>
+          </div>
+          <div class="tblwrap">
+            <table class="tbl" id="submissionDoneTable">
+              <thead><tr><th style="width:150px">送出時間</th><th>姓名</th><th style="width:80px">航次筆數</th><th style="width:90px">狀態</th><th style="width:170px">處理時間／處理人</th><th style="width:330px">操作</th></tr></thead>
+              <tbody id="submissionDoneBody"></tbody>
+            </table>
+          </div>
         </div>
 
         <div id="rosterSubUpload" hidden>
@@ -3164,10 +3179,58 @@ async function renderAdminTab(){
 }
 
 /* ── 網路填單審核 ── */
+let submissionDoneFilter="";
+const fmtDT=s=>{ if(!s) return "—"; const t=new Date(s); return `${t.getFullYear()}/${t.getMonth()+1}/${t.getDate()} ${String(t.getHours()).padStart(2,"0")}:${String(t.getMinutes()).padStart(2,"0")}`; };
+function findSubmission(id){
+  return (State.submissions||[]).find(s=>s.id===id) || (State.submissionsDone||[]).find(s=>s.id===id);
+}
+function renderSubmissionDone(){
+  const body=document.getElementById("submissionDoneBody");
+  document.querySelectorAll("#submissionDoneSeg button").forEach(b=>b.classList.toggle("on", b.dataset.v===submissionDoneFilter));
+  const rows=(State.submissionsDone||[]).filter(r=>!submissionDoneFilter || r.status===submissionDoneFilter);
+  if(!rows.length){
+    body.innerHTML=`<tr><td colspan="6" class="hint" style="text-align:center;padding:20px">沒有符合的紀錄</td></tr>`;
+    return;
+  }
+  body.innerHTML=rows.map(r=>{
+    const n=(r.payload&&r.payload.voyages)? r.payload.voyages.length : 0;
+    const ok=r.status==="approved";
+    const reason=(r.payload&&r.payload.reject_reason)? `<div class="hint" style="font-size:11px">退回原因：${esc(r.payload.reject_reason)}</div>` : "";
+    return `<tr><td class="mono">${fmtDT(r.submitted_at)}</td><td><b>${esc(r.submitted_name||"")}</b>${reason}</td><td class="mono">${n}</td>
+      <td>${ok? '<span class="tag green">已匯入</span>' : '<span class="tag red">已拒絕</span>'}</td>
+      <td class="mono" style="font-size:11.5px">${fmtDT(r.reviewed_at)}<div class="hint" style="font-size:11px">${esc(r.reviewer||"")}</div></td>
+      <td style="white-space:nowrap">
+        <button class="btn sm" onclick="reviewSubmission('${r.id}')">🔍 檢視</button>
+        ${ok? "" : `<button class="btn sm primary" onclick="approveSubmission('${r.id}')">↩ 重新匯入</button>
+        <button class="btn sm" onclick="copyFixLink('${r.id}')">🔗 複製修正連結</button>`}
+      </td></tr>`;
+  }).join("");
+}
+document.getElementById("submissionDoneSeg").addEventListener("click", e=>{
+  const btn=e.target.closest("button"); if(!btn) return;
+  submissionDoneFilter=btn.dataset.v;
+  renderSubmissionDone();
+});
+async function copyFixLink(id){
+  const sub=findSubmission(id);
+  if(!sub) return;
+  const data={person:sub.payload.person, voyages:sub.payload.voyages, reason:sub.payload.reject_reason||""};
+  const url=submitFormUrl()+"#fix="+btoa(unescape(encodeURIComponent(JSON.stringify(data))));
+  try{
+    await navigator.clipboard.writeText(url);
+    notify("已複製修正連結，傳給船上即可；開啟後會帶入原填內容，修改後重新送出會進入待審核");
+  }catch(e){
+    prompt("自動複製失敗，請手動複製下面的連結：", url);
+  }
+}
 async function renderSubmissionTable(){
   const body=document.getElementById("submissionBody");
   const badge=document.getElementById("submissionBadge");
   body.innerHTML=`<tr><td colspan="4" class="hint" style="text-align:center;padding:20px">載入中…</td></tr>`;
+  try{
+    State.submissionsDone=await sbAll("crew_submissions","?select=*&status=in.(approved,rejected)&order=submitted_at.desc");
+    renderSubmissionDone();
+  }catch(e){ console.warn("已處理紀錄讀取失敗", e); }
   try{
     const rows=await sbAll("crew_submissions","?select=*&status=eq.pending&order=submitted_at.desc");
     State.submissions=rows;
@@ -3189,7 +3252,7 @@ async function renderSubmissionTable(){
   }
 }
 function reviewSubmission(id){
-  const sub=(State.submissions||[]).find(s=>s.id===id);
+  const sub=findSubmission(id);
   if(!sub) return;
   const {person, voyages}=sub.payload;
   const host=document.createElement("div");
@@ -3214,18 +3277,25 @@ function reviewSubmission(id){
         </table>
       </div>
     </div>
-    <div style="margin-top:20px;display:flex;gap:8px;justify-content:flex-end">
-      <button class="btn danger" onclick="rejectSubmission('${sub.id}')">❌ 拒絕</button>
-      <button class="btn primary" onclick="approveSubmission('${sub.id}')">✅ 核准並匯入</button>
+    ${sub.status==="rejected" && sub.payload.reject_reason? `<p class="hint" style="margin-top:14px;color:var(--bad)">退回原因：${esc(sub.payload.reject_reason)}</p>` : ""}
+    <div style="margin-top:20px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
+      ${sub.status==="pending" ? `
+        <button class="btn danger" onclick="rejectSubmission('${sub.id}')">❌ 拒絕</button>
+        <button class="btn primary" onclick="approveSubmission('${sub.id}')">✅ 核准並匯入</button>`
+      : sub.status==="rejected" ? `
+        <button class="btn" onclick="copyFixLink('${sub.id}')">🔗 複製修正連結（請船上重填）</button>
+        <button class="btn primary" onclick="approveSubmission('${sub.id}')">↩ 重新匯入</button>`
+      : `<span class="tag green">此筆已於 ${fmtDT(sub.reviewed_at)} 匯入</span>`}
     </div>
   </div>`;
   document.body.appendChild(host);
 }
 async function approveSubmission(id){
-  const sub=(State.submissions||[]).find(s=>s.id===id);
+  const sub=findSubmission(id);
   if(!sub) return;
   const operator=requireChangeAuth();
   if(!operator) return;
+  if(sub.status==="rejected" && !confirm(`「${sub.submitted_name}」這筆先前已被拒絕，確定要重新匯入嗎？`)) return;
   try{
     const {person, voyages}=sub.payload;
     const {renamed}=await upsertPerson(person, voyages);
@@ -3238,12 +3308,14 @@ async function approveSubmission(id){
   }catch(e){ notify("核准失敗："+e.message,"err"); }
 }
 async function rejectSubmission(id){
-  const sub=(State.submissions||[]).find(s=>s.id===id);
+  const sub=findSubmission(id);
   const operator=requireChangeAuth();
   if(!operator) return;
-  if(!confirm(`確定要拒絕「${sub? sub.submitted_name : ""}」這筆填單？`)) return;
+  const reason=prompt(`確定要拒絕「${sub? sub.submitted_name : ""}」這筆填單？\n\n可輸入退回原因（選填，之後複製修正連結時會一併帶給船上看）。按「取消」則不拒絕：`, "");
+  if(reason===null) return;
   try{
-    await sb("PATCH","crew_submissions",{query:`?id=eq.${id}`, body:{status:"rejected", reviewed_at:new Date().toISOString(), reviewer:operator}, prefer:"return=minimal"});
+    const payload={...(sub? sub.payload : {}), reject_reason:reason.trim()};
+    await sb("PATCH","crew_submissions",{query:`?id=eq.${id}`, body:{status:"rejected", reviewed_at:new Date().toISOString(), reviewer:operator, payload}, prefer:"return=minimal"});
     const host=document.getElementById("submissionReviewHost"); if(host) host.remove();
     renderSubmissionTable();
     notify("已拒絕該筆填單");
