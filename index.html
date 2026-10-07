@@ -317,8 +317,8 @@ table.matrix tr.yellow td{background:var(--yellow)}
           </div>
           <div class="panelbox" style="margin-bottom:16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
             <div>
-              <b style="font-size:13.5px">📱 手機填單連結</b>
-              <div class="hint" style="margin-top:2px">給不方便用 Excel 的船員自行填寫海上資歷，送出後要在「船員資料庫 → ③ 資料審核入庫」核准才會正式匯入</div>
+              <b style="font-size:13.5px">📝 Crew Matrix 人員建檔填單</b>
+              <div class="hint" style="margin-top:2px">在電腦上填寫人員基本資料與海上資歷（版面同「新增船員」），不用準備 Excel；送出後要在「船員資料庫 → ③ 資料審核入庫」核准才會正式匯入</div>
             </div>
             <code id="submitLinkText" class="mono" style="margin-left:auto;background:#f3f6f7;padding:6px 10px;border-radius:5px;font-size:12px;color:var(--ink-2)"></code>
             <button class="btn sm primary" id="btnCopySubmitLink">🔗 複製連結</button>
@@ -441,7 +441,7 @@ table.matrix tr.yellow td{background:var(--yellow)}
           <li><b>進階篩選</b>——點「🔎 進階篩選」展開現職、目前/最後船名、勞務公司三個下拉篩選，可以互相搭配使用；不用時收合起來，畫面比較乾淨。</li>
           <li><b>搜尋 / 檢視 / 編輯</b>——搜尋框可依姓名、英文名、職級或勞務公司篩選；點任一列右側「檢視/編輯」會切換到整頁編輯畫面（不是彈出視窗），可直接改基本資料、新增或刪除航次，改完按「返回列表」即回到名單。</li>
           <li><b>手動新增船員</b>——沒有 Excel 檔、想直接在網站上建一筆新資料時用「＋ 新增船員」，會建立一筆空白資料並直接進入編輯畫面。</li>
-          <li><b>手機填單（不用 Excel）</b>——把 <code>submit-crewform.html</code> 這個獨立網頁的連結分享給船員，手機也能直接填寫海上資歷，送出後不會馬上進資料庫，會先進「船員資料庫 → ③ 資料審核入庫」（需要輸入異動密碼才能進入），管理者確認內容沒問題、按「核准並匯入」才會正式生效，避免有人打錯姓名蓋掉別人的資料。</li>
+          <li><b>Crew Matrix 人員建檔填單（不用 Excel）</b>——把 <code>submit-crewform.html</code> 這個獨立網頁的連結分享給船上，在電腦上直接填寫基本資料與海上資歷（船名可從系統船舶清單選，清單沒有的選「自訂」自填；見習請在備註註明），送出後不會馬上進資料庫，會先進「船員資料庫 → ③ 資料審核入庫」（需要輸入異動密碼才能進入），管理者確認內容沒問題、按「核准並匯入」才會正式生效，避免有人打錯姓名蓋掉別人的資料。</li>
           <li><b>批次刪除船員</b>——勾選要刪除的船員（表頭打勾可全選目前顯示的名單），畫面上方會出現「🗑 刪除已選船員」按鈕。<b style="color:var(--bad)">此動作需要輸入密碼，且無法復原，刪除前請再三確認。</b></li>
           <li><b>匯出備份</b>——右上角「⬇ 匯出備份」會把目前資料庫全部匯出成 Excel（船員基本資料／全部航次／船舶配置三張分頁），建議定期備份留存。</li>
         </ol>
