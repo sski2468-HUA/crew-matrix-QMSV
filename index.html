@@ -2717,7 +2717,7 @@ function buildPersonSheetAOA(person){
     ["海上資歷 (Service experience)"],
     [],
     ["姓名：", person.name, "", "勞務公司：", person.manning_agency||"", "", "英語能力", person.english||"", "", "進入公司日期：", person.join_date? isoToDate(person.join_date) : ""],
-    ["現職：", person.rank_now||"", "", "國籍", person.nationality||"", "", "", "", "", "Tank船證書", person.tanker_cert||""],
+    ["現職：", person.rank_now||"", "", "國籍", person.nationality||"", "", "見習職務", person.rank_trainee||"", "", "Tank船證書", person.tanker_cert||""],
     ["證書種類", person.coc||"", "", "發證國", person.issuing_country||"", "", "特別證書", person.stcw||"", "", "電台證書", person.radio||""],
     [],
     ["項次","職位","","船名","","上船日期","下船日期","在船天數","化","油/化","油","氣體","其他","原船晉升-原上船日","（內部用，勿刪）有效上船日","備註"],
