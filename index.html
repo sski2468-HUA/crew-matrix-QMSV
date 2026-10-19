@@ -2639,33 +2639,105 @@ function exportXlsxMatrix(){
   }catch(e){ notify("匯出失敗："+e.message, "err"); }
 }
 
-/* ── 空白個人資歷範本：給還沒有資料的新船員填寫，填完可直接用「匯入個人資歷表」匯入 ──
-   儲存格位置跟 parsePersonSheet() 讀取的位置完全對齊，不要調整任何一格的位置/合併，
-   否則填完之後系統會讀不到。 */
+/* ── 空白個人資歷範本（甲板）：版面、合併儲存格、公式與公司原本的「CREW MATRIX(空白)-甲板.xls」一致，另加美化。
+   填完可直接用「匯入個人資歷表」匯入——儲存格位置跟 parsePersonSheet() 讀取的位置對齊
+   （D2 姓名、D3 英文名、F2 勞務、H2 英語、K2 進公司日、D4/F4/K4、D6/F6/H6/K6，航次從第 12 列起，N 欄備註）。 */
 function buildBlankPersonTemplate(){
-  const aoa=[];
-  const set=(r,c,v)=>{ while(aoa.length<r) aoa.push([]); while(aoa[r-1].length<c) aoa[r-1].push(""); aoa[r-1][c-1]=v; };
-  set(1,1,"海上資歷　(Service experience)　※填寫說明：只需要填 D、F、H、K 欄（藍字提示旁邊的空格），其餘文字是欄位說明，不要更動位置");
-  set(2,1,"姓名："); set(2,5,"勞務公司："); set(2,7,"英語能力"); set(2,9,"進入公司日期：");
-  set(3,1,"Name:"); set(3,5,"Manning agency:"); set(3,7,"English proficiency"); set(3,9,"Company join date:");
-  set(4,1,"現職："); set(4,5,"國籍"); set(4,9,"Tank船證書（填 Oil/Chem 等）");
-  set(5,1,"Rank at present:"); set(5,5,"Nationality"); set(5,9,"Tanker certification");
-  set(6,1,"證書種類"); set(6,5,"發證國"); set(6,7,"特別證書"); set(6,9,"電台證書");
-  set(7,1,"Certificate of Competency"); set(7,5,"Issuing Country"); set(7,7,"SQ for current cargo（Para 1 or 2）"); set(7,8,""); set(7,9,"Radio qualification（例：GOC）");
-  set(8,1,"※※※只填寫空白欄位，請勿更改任何格式／欄位位置※※※");
-  set(9,1,"項次"); set(9,2,"職位"); set(9,4,"船名"); set(9,6,"上船日期"); set(9,7,"下船日期"); set(9,9,"船型 Vessel type（打 V）");
-  set(10,1,"No."); set(10,2,"Rank"); set(10,3,""); set(10,4,"Ship name"); set(10,6,"Date of Sign On"); set(10,7,"Date of Sign Off"); set(10,8,"Days");
-  set(10,9,"化"); set(10,10,"油/化"); set(10,11,"油"); set(10,12,"氣體"); set(10,13,"其他");
-  set(11,9,"Chem"); set(11,10,"Oil/Chem"); set(11,11,"Oil"); set(11,12,"Gas"); set(11,13,"Other");
-  for(let i=0;i<15;i++) set(12+i,1,i+1);
-  const ws=XLSX.utils.aoa_to_sheet(aoa);
-  ws["!cols"]=PERSON_XLSX_COLS;
+  const FONT="Microsoft JhengHei", NAVY="1C3A5E", LINE={style:"thin",color:{rgb:"8FA3B0"}};
+  const BORDER={top:LINE,bottom:LINE,left:LINE,right:LINE};
+  const ws={}, merges=[];
+  const addr=(r,c)=>XLSX.utils.encode_cell({r:r-1,c:c-1});
+  const st=(o={})=>({
+    font:{name:FONT,sz:o.sz||10,bold:!!o.bold,italic:!!o.italic,color:{rgb:o.color||"15262F"}},
+    alignment:{horizontal:o.left?"left":"center",vertical:"center",wrapText:true},
+    border:BORDER,
+    ...(o.fill?{fill:{patternType:"solid",fgColor:{rgb:o.fill}}}:{}),
+  });
+  const put=(r,c,v,s,extra)=>{ ws[addr(r,c)]={t:(typeof v==="number")?"n":"s", v:(v==null?"":v), s, ...(extra||{})}; };
+  const fml=(r,c,f,s,z)=>{ ws[addr(r,c)]={t:"n", f, s, ...(z?{z}:{})}; };
+  const area=(r1,c1,r2,c2,s)=>{ for(let r=r1;r<=r2;r++) for(let c=c1;c<=c2;c++){ if(!ws[addr(r,c)]) ws[addr(r,c)]={t:"s",v:"",s}; } };
+  const merge=(r1,c1,r2,c2,s)=>{ merges.push({s:{r:r1-1,c:c1-1},e:{r:r2-1,c:c2-1}}); if(s) area(r1,c1,r2,c2,s); };
+  const HEAD=st({bold:true,color:"FFFFFF",fill:NAVY}), LBL=st({bold:true,fill:"E3EBF2"}), LBL_EN=st({fill:"EEF3F7",color:"52656F",sz:9});
+  const INPUT=st({fill:"FFF6C8",left:true}), HINT=st({fill:"F1F3F5",color:"8195A0",sz:9,italic:true});
+
+  /* 標題 */
+  put(1,1,"海上資歷     (Service experience)",st({bold:true,sz:14,color:"FFFFFF",fill:NAVY})); merge(1,1,1,14,st({fill:NAVY}));
+  /* 基本資料（左：中文標籤列／英文標籤列，右：填寫欄） */
+  const lab=(r,c,zh,en,c2)=>{ put(r,c,zh,LBL); put(r+1,c,en,LBL_EN); if(c2){ merge(r,c,r,c2,LBL); merge(r+1,c,r+1,c2,LBL_EN); } };
+  lab(2,1,"姓名：","Name:",3);      area(2,4,2,4,INPUT); area(3,4,3,4,INPUT);
+  lab(2,5,"勞務公司：","Manning agency:");   area(2,6,2,6,INPUT); area(3,6,3,6,HINT);
+  lab(2,7,"英語能力","English proficiency");  area(2,8,2,8,INPUT);
+  lab(2,9,"進入公司日期：","Company join date:",10); merge(2,11,2,13,INPUT); merge(3,11,3,13,HINT);
+  lab(4,1,"現職：","Rank at present:",3);  area(4,4,4,4,INPUT); area(5,4,5,4,HINT);
+  lab(4,5,"國籍","Nationality");           area(4,6,4,6,INPUT); area(5,6,5,6,HINT);
+  put(4,7,"",HINT); put(5,7,"",HINT); put(3,8,"",HINT); put(4,8,"(Good/Fair/Poor)",HINT); put(5,8,"",HINT);
+  lab(4,9,"Tank船證書","Tanker certification",10); merge(4,11,4,13,INPUT); put(5,11,"(Oil/Chem/Gas)",HINT); merge(5,11,5,13,HINT);
+  lab(6,1,"證書種類","Certificate of Competency",3); area(6,4,6,4,INPUT); area(7,4,7,4,HINT);
+  lab(6,5,"發證國","Issuing Country");     area(6,6,6,6,INPUT); area(7,6,7,6,HINT);
+  lab(6,7,"特別證書","SQ for current cargo"); area(6,8,6,8,INPUT); put(7,8,"(Para 1 or 2)",HINT);
+  lab(6,9,"電台證書","Radio qualification",10); merge(6,11,6,13,INPUT); put(7,11,"(GOC)",HINT); merge(7,11,7,13,HINT);
+  put(8,1,"※※※只填寫黃色區域--------請勿更改任何格式※※※",st({bold:true,color:"C0392B",fill:"FDECEA"})); merge(8,1,8,14,st({fill:"FDECEA"}));
+  /* 航次表頭 */
+  put(9,1,"項次",HEAD); put(10,1,"No.",HEAD); area(11,1,11,1,HEAD);
+  put(9,2,"職位",HEAD); merge(9,2,9,3,HEAD); put(10,2,"Rank",HEAD); merge(10,2,10,3,HEAD); area(11,2,11,3,HEAD);
+  put(9,4,"船名",HEAD); merge(9,4,9,5,HEAD); put(10,4,"Ship name",HEAD); merge(10,4,10,5,HEAD); area(11,4,11,5,HEAD);
+  put(9,6,"上船日期",HEAD); put(10,6,"Date of Sign On",HEAD); area(11,6,11,6,HEAD);
+  put(9,7,"下船日期",HEAD); put(10,7,"Date of Sign Off",HEAD); area(11,7,11,7,HEAD);
+  put(9,8,"在船天數",HEAD); put(10,8,"Days",HEAD); area(11,8,11,8,HEAD);
+  put(9,9,"船型 Vessel type",HEAD); merge(9,9,9,13,HEAD);
+  [["化","Chem"],["油/化","Oil/Chem"],["油","Oil"],["氣體","Gas"],["其他","Other"]].forEach(([zh,en],i)=>{ put(10,9+i,zh,HEAD); put(11,9+i,en,HEAD); });
+  put(9,14,"備註",HEAD); put(10,14,"Remarks",HEAD); area(11,14,11,14,HEAD);
+  /* 航次列（第12~44列）：依職級分組上色，標籤跟原表一致 */
+  const groups=[[4,"實習生","Cadet","E3F1F3",(i)=>"a"+(i+1)],[5,"三副","3/O","E3F4E8",(i)=>i+1],[6,"二副","2/O","E1ECF7",(i)=>6+i],
+                [6,"大副","C/O","EEE8F7",(i)=>12+i],[12,"船長","Capt.","FDEBD3",(i)=>18+i]];
+  let r=12;
+  for(const [n,cn,code,color,label] of groups){
+    for(let i=0;i<n;i++,r++){
+      put(r,1,label(i),st({fill:color,bold:true}));
+      put(r,2,cn,st({fill:color})); put(r,3,code,st({fill:color}));
+      put(r,4,"",INPUT); merge(r,4,r,5,INPUT);
+      put(r,6,"",st({fill:"FFF6C8"}),{z:"yyyy/m/d"}); put(r,7,"",st({fill:"FFF6C8"}),{z:"yyyy/m/d"});
+      fml(r,8,`IF(AND(ISNUMBER(F${r}),ISNUMBER(G${r})),MAX(G${r}-F${r},0),0)`,st({fill:"EEF3F7"}),"0;-0;;@");
+      for(let c=9;c<=13;c++) put(r,c,"",st({fill:"FFF6C8"}));
+      put(r,14,"",INPUT);
+    }
+  }
+  /* 小計列（第45列） */
+  put(45,1,"小計 (Total)",st({bold:true,fill:"E3EBF2"})); merge(45,1,45,3,st({bold:true,fill:"E3EBF2"}));
+  put(45,4,"目前在船日期",st({bold:true,fill:"E3EBF2"})); merge(45,4,45,5,st({bold:true,fill:"E3EBF2"}));
+  fml(45,6,"IFERROR(TODAY()-VLOOKUP(TODAY(),F12:G44,1),\"\")",st({bold:true,fill:"E3EBF2"}));
+  put(45,7,"",st({fill:"E3EBF2"}));
+  fml(45,8,"SUM(H16:H44)",st({bold:true,fill:"E3EBF2"}),"0");
+  ["I","J","K","L","M"].forEach((col,i)=> fml(45,9+i,`COUNTIF(${col}16:${col}44,"?*")`,st({bold:true,fill:"E3EBF2"}),"0"));
+  /* 職級×船型資歷統計表（第48~55列） */
+  put(48,4,"職級",HEAD); put(49,4,"Rank",HEAD);
+  [["化","Chem"],["油/化","Oil/Chem"],["油","Oil"],["氣體","Gas"],["其他","Other"]].forEach(([zh,en],i)=>{ put(48,5+i,zh,HEAD); put(49,5+i,en,HEAD); });
+  put(48,10,"合計",HEAD); merge(48,10,48,11,HEAD); put(49,10,"Total",HEAD); merge(49,10,49,11,HEAD);
+  put(48,12,"合計(年)",HEAD); merge(48,12,49,13,HEAD);
+  const TBL=st({}), TBL_B=st({bold:true,fill:"E3EBF2"}), SUMROW=st({bold:true,fill:"E3F1F3"});
+  ["CAPT.","C/O","2/O","3/O"].forEach((rk,i)=>{
+    const rr=50+i;
+    put(rr,4,rk,TBL_B);
+    ["I","J","K","L","M"].forEach((col,j)=> fml(rr,5+j,`SUMPRODUCT(($B$12:$C$44=$D${rr})*(LEN(${col}$12:${col}$44)>0)*($H$12:$H$44))`,TBL,"0"));
+    fml(rr,10,`SUM(E${rr}:I${rr})`,TBL,"0"); merge(rr,10,rr,11,TBL);
+    fml(rr,12,`J${rr}/365`,TBL,"0.0"); merge(rr,12,rr,13,TBL);
+  });
+  put(54,4,"合計 (Days)",SUMROW); put(55,4,"合計 (Years)",SUMROW);
+  ["E","F","G","H","I"].forEach((col,j)=>{ fml(54,5+j,`SUM(${col}50:${col}53)`,SUMROW,"0"); fml(55,5+j,`${col}54/365`,SUMROW,"0.0"); });
+  fml(54,10,"SUM(E54:I54)",SUMROW,"0"); merge(54,10,54,11,SUMROW);
+  fml(55,10,"SUM(E55:I55)",SUMROW,"0.0"); merge(55,10,55,11,SUMROW);
+  fml(54,12,"SUM(L50:L53)",SUMROW,"0.0"); merge(54,12,54,13,SUMROW);
+  put(55,12,"",SUMROW); merge(55,12,55,13,SUMROW);
+  /* 版面：欄寬／列高 */
+  ws["!ref"]="A1:N55"; ws["!merges"]=merges;
+  ws["!cols"]=[{wch:9},{wch:9},{wch:8},{wch:12},{wch:15},{wch:15},{wch:15},{wch:15},{wch:9},{wch:9},{wch:9},{wch:9},{wch:9},{wch:22}];
+  ws["!rows"]=[{hpt:28},{hpt:22},{hpt:28},{hpt:22},{hpt:28},{hpt:22},{hpt:28},{hpt:22},{hpt:20},{hpt:18},{hpt:16}];
+  ws["!pageSetup"]={orientation:"portrait",fitToWidth:1,fitToHeight:0};
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "個人資歷");
-  XLSX.writeFile(wb, "個人資歷_空白範本.xlsx");
-  logAction("下載空白範本", "個人資歷範本");
-}
-document.getElementById("btnDownloadTemplate").addEventListener("click", buildBlankPersonTemplate);
+  XLSX.writeFile(wb, "個人資歷_空白範本(甲板).xlsx");
+  logAction("下載空白範本", "個人資歷範本（甲板）");
+}document.getElementById("btnDownloadTemplate").addEventListener("click", buildBlankPersonTemplate);
 
 /* ── 手機填單連結：以目前網址自動推算 submit-crewform.html 的完整網址 ──
    用 URL 相對路徑解析，比自己拼 origin+pathname 可靠——在少數瀏覽器情境下
