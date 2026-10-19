@@ -305,7 +305,8 @@ table.matrix tr.yellow td{background:var(--yellow)}
               <span class="hint">支援 .xls / .xlsx，格式為「海上資歷 Service experience」表。同名船員將以新檔覆蓋既有資料。</span>
             </div>
             <button class="btn dark" id="btnPickFile">選擇檔案</button>
-            <button class="btn sm" id="btnDownloadTemplate">📄 下載空白範本</button>
+            <button class="btn sm" id="btnDownloadTemplate">📄 下載空白範本（甲板）</button>
+            <button class="btn sm" id="btnDownloadTemplateEng">📄 下載空白範本（輪機）</button>
             <input type="file" id="fileInput" multiple accept=".xls,.xlsx,.xlsm" style="display:none">
           </div>
           <div class="panelbox" style="margin-bottom:16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
@@ -2642,7 +2643,9 @@ function exportXlsxMatrix(){
 /* ── 空白個人資歷範本（甲板）：版面、合併儲存格、公式與公司原本的「CREW MATRIX(空白)-甲板.xls」一致，另加美化。
    填完可直接用「匯入個人資歷表」匯入——儲存格位置跟 parsePersonSheet() 讀取的位置對齊
    （D2 姓名、D3 英文名、F2 勞務、H2 英語、K2 進公司日、D4/F4/K4、D6/F6/H6/K6，航次從第 12 列起，N 欄備註）。 */
-function buildBlankPersonTemplate(){
+function buildBlankPersonTemplate(dept){
+  const isEng = dept==="engine";
+  const GAS_ZH = isEng ? "液態氣" : "氣體";
   const FONT="Microsoft JhengHei", NAVY="1C3A5E", LINE={style:"thin",color:{rgb:"8FA3B0"}};
   const BORDER={top:LINE,bottom:LINE,left:LINE,right:LINE};
   const ws={}, merges=[];
@@ -2671,7 +2674,7 @@ function buildBlankPersonTemplate(){
   lab(4,1,"現職：","Rank at present:",3);  area(4,4,4,4,INPUT); area(5,4,5,4,HINT);
   lab(4,5,"國籍","Nationality");           area(4,6,4,6,INPUT); area(5,6,5,6,HINT);
   put(4,7,"",HINT); put(5,7,"",HINT); put(3,8,"",HINT); put(4,8,"(Good/Fair/Poor)",HINT); put(5,8,"",HINT);
-  lab(4,9,"Tank船證書","Tanker certification",10); merge(4,11,4,13,INPUT); put(5,11,"(Oil/Chem/Gas)",HINT); merge(5,11,5,13,HINT);
+  lab(4,9,"Tank船證書","Tanker certification",10); merge(4,11,4,13,INPUT); put(5,11,isEng?"(Oil/Chem)":"(Oil/Chem/Gas)",HINT); merge(5,11,5,13,HINT);
   lab(6,1,"證書種類","Certificate of Competency",3); area(6,4,6,4,INPUT); area(7,4,7,4,HINT);
   lab(6,5,"發證國","Issuing Country");     area(6,6,6,6,INPUT); area(7,6,7,6,HINT);
   lab(6,7,"特別證書","SQ for current cargo"); area(6,8,6,8,INPUT); put(7,8,"(Para 1 or 2)",HINT);
@@ -2685,11 +2688,16 @@ function buildBlankPersonTemplate(){
   put(9,7,"下船日期",HEAD); put(10,7,"Date of Sign Off",HEAD); area(11,7,11,7,HEAD);
   put(9,8,"在船天數",HEAD); put(10,8,"Days",HEAD); area(11,8,11,8,HEAD);
   put(9,9,"船型 Vessel type",HEAD); merge(9,9,9,13,HEAD);
-  [["化","Chem"],["油/化","Oil/Chem"],["油","Oil"],["氣體","Gas"],["其他","Other"]].forEach(([zh,en],i)=>{ put(10,9+i,zh,HEAD); put(11,9+i,en,HEAD); });
+  [["化","Chem"],["油/化","Oil/Chem"],["油",  "Oil"],[GAS_ZH,"Gas"],["其他","Other"]].forEach(([zh,en],i)=>{ put(10,9+i,zh,HEAD); put(11,9+i,en,HEAD); });
   put(9,14,"備註",HEAD); put(10,14,"Remarks",HEAD); area(11,14,11,14,HEAD);
   /* 航次列（第12~44列）：依職級分組上色，標籤跟原表一致 */
-  const groups=[[4,"實習生","Cadet","E3F1F3",(i)=>"a"+(i+1)],[5,"三副","3/O","E3F4E8",(i)=>i+1],[6,"二副","2/O","E1ECF7",(i)=>6+i],
-                [6,"大副","C/O","EEE8F7",(i)=>12+i],[12,"船長","Capt.","FDEBD3",(i)=>18+i]];
+  const cadetN = isEng ? 3 : 4;
+  const groups = isEng
+    ? [[3,"實習生","Cadet","E3F1F3",(i)=>"a"+(i+1)],[5,"三管","4/E","E3F4E8",(i)=>i+1],[6,"二管","3/E","E1ECF7",(i)=>6+i],
+       [6,"大管","2/E","EEE8F7",(i)=>12+i],[13,"輪機長","C/E","FDEBD3",(i)=>18+i]]
+    : [[4,"實習生","Cadet","E3F1F3",(i)=>"a"+(i+1)],[5,"三副","3/O","E3F4E8",(i)=>i+1],[6,"二副","2/O","E1ECF7",(i)=>6+i],
+       [6,"大副","C/O","EEE8F7",(i)=>12+i],[12,"船長","Capt.","FDEBD3",(i)=>18+i]];
+  const R0 = 12+cadetN; // 第一筆正式職級列（Cadet 不計入小計）
   let r=12;
   for(const [n,cn,code,color,label] of groups){
     for(let i=0;i<n;i++,r++){
@@ -2707,15 +2715,15 @@ function buildBlankPersonTemplate(){
   put(45,4,"目前在船日期",st({bold:true,fill:"E3EBF2"})); merge(45,4,45,5,st({bold:true,fill:"E3EBF2"}));
   fml(45,6,"IFERROR(TODAY()-VLOOKUP(TODAY(),F12:G44,1),\"\")",st({bold:true,fill:"E3EBF2"}));
   put(45,7,"",st({fill:"E3EBF2"}));
-  fml(45,8,"SUM(H16:H44)",st({bold:true,fill:"E3EBF2"}),"0");
-  ["I","J","K","L","M"].forEach((col,i)=> fml(45,9+i,`COUNTIF(${col}16:${col}44,"?*")`,st({bold:true,fill:"E3EBF2"}),"0"));
+  fml(45,8,`SUM(H${R0}:H44)`,st({bold:true,fill:"E3EBF2"}),"0");
+  ["I","J","K","L","M"].forEach((col,i)=> fml(45,9+i,`COUNTIF(${col}${R0}:${col}44,"?*")`,st({bold:true,fill:"E3EBF2"}),"0"));
   /* 職級×船型資歷統計表（第48~55列） */
   put(48,4,"職級",HEAD); put(49,4,"Rank",HEAD);
-  [["化","Chem"],["油/化","Oil/Chem"],["油","Oil"],["氣體","Gas"],["其他","Other"]].forEach(([zh,en],i)=>{ put(48,5+i,zh,HEAD); put(49,5+i,en,HEAD); });
+  [["化","Chem"],["油/化","Oil/Chem"],["油","Oil"],[GAS_ZH,"Gas"],["其他","Other"]].forEach(([zh,en],i)=>{ put(48,5+i,zh,HEAD); put(49,5+i,en,HEAD); });
   put(48,10,"合計",HEAD); merge(48,10,48,11,HEAD); put(49,10,"Total",HEAD); merge(49,10,49,11,HEAD);
   put(48,12,"合計(年)",HEAD); merge(48,12,49,13,HEAD);
   const TBL=st({}), TBL_B=st({bold:true,fill:"E3EBF2"}), SUMROW=st({bold:true,fill:"E3F1F3"});
-  ["CAPT.","C/O","2/O","3/O"].forEach((rk,i)=>{
+  (isEng ? ["C/E","2/E","3/E","4/E"] : ["CAPT.","C/O","2/O","3/O"]).forEach((rk,i)=>{
     const rr=50+i;
     put(rr,4,rk,TBL_B);
     ["I","J","K","L","M"].forEach((col,j)=> fml(rr,5+j,`SUMPRODUCT(($B$12:$C$44=$D${rr})*(LEN(${col}$12:${col}$44)>0)*($H$12:$H$44))`,TBL,"0"));
@@ -2735,9 +2743,12 @@ function buildBlankPersonTemplate(){
   ws["!pageSetup"]={orientation:"portrait",fitToWidth:1,fitToHeight:0};
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "個人資歷");
-  XLSX.writeFile(wb, "個人資歷_空白範本(甲板).xlsx");
-  logAction("下載空白範本", "個人資歷範本（甲板）");
-}document.getElementById("btnDownloadTemplate").addEventListener("click", buildBlankPersonTemplate);
+  const deptName = isEng ? "輪機" : "甲板";
+  XLSX.writeFile(wb, `個人資歷_空白範本(${deptName}).xlsx`);
+  logAction("下載空白範本", `個人資歷範本（${deptName}）`);
+}
+document.getElementById("btnDownloadTemplate").addEventListener("click", ()=>buildBlankPersonTemplate("deck"));
+document.getElementById("btnDownloadTemplateEng").addEventListener("click", ()=>buildBlankPersonTemplate("engine"));
 
 /* ── 手機填單連結：以目前網址自動推算 submit-crewform.html 的完整網址 ──
    用 URL 相對路徑解析，比自己拼 origin+pathname 可靠——在少數瀏覽器情境下
