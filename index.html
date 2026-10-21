@@ -553,11 +553,10 @@ table.matrix tr.yellow td{background:var(--yellow)}
         <p class="hint" style="margin:8px 0 10px">路徑：<b>① Crew Matrix → ③ 船員異動</b> 最上方的「📥 匯入異動回報單」。收到船員組的「調(異)動聯繫(回報)單」Excel（.xls／.xlsx）時，不用再一筆一筆點職位：系統讀出報表，先給你預覽，確認後一次寫入。</p>
         <ol style="margin:0 0 12px;padding-left:20px;font-size:13.5px;line-height:2">
           <li>按「📥 選擇異動單檔案」，選取收到的異動回報單。</li>
-          <li>系統自動讀出船名、報表日期，以及四個區塊：<b>下船、岸休上船、新進上船、提升(調任)</b>。只處理<b>高級船員</b>（CAPT.、C/O、2/O、3/O、C/E、2/E、3/E、4/E，含 A. 見習）；PM、OS、COOK、OLR 等部員會自動略過。</li>
+          <li>系統自動讀出船名、報表日期，以及四個區塊：<b>下船、岸休上船、新進上船、提升(調任)</b>。只處理<b>正式高級船員</b>（CAPT.、C/O、2/O、3/O、C/E、2/E、3/E、4/E）；PM、OS、COOK、OLR 等部員會自動略過；<b>見習（A. 開頭，例如 A.3/O、A.4/E）不自動處理</b>，預覽畫面上方會列出名單，請用原本的手動方式辦理。</li>
           <li>跳出「異動單預覽」：確認上方「對應系統船舶」對得對（對不到時從選單選）；日期已帶入報表的<b>實際上/下船日</b>，可直接修改；不想執行的項目取消勾選。</li>
           <li><b>上船的職位</b>預設挑空缺的職位，或同一批裡剛下船的那個職位，可用下拉選單改。目標職位如果還有人、又不是這批要離開的，系統會擋下來。</li>
-          <li><b>見習（A. 開頭，例如 A.4/E）</b>不佔正式職位：該筆航次備註自動寫「見習」，人員的「見習職務」欄寫成 A.4/E；航次職級預設用該員現職，不是高級船員職級時用 Cadet（不計職級年資），可在預覽裡改。</li>
-          <li><b>提升(調任)</b>區塊會用「原船晉升」的邏輯處理，上船日期沿用原本的；見習晉升則只更新見習職務。</li>
+          <li><b>提升(調任)</b>區塊（正式職位）會用「原船晉升」的邏輯處理，上船日期沿用原本的。</li>
           <li>按「✓ 確認執行（需異動密碼）」，輸入姓名與異動密碼後一次寫入，並留下操作紀錄。</li>
         </ol>
         <div style="background:var(--yellow);border:1px solid #f3d3ab;border-left:4px solid var(--signal);border-radius:8px;padding:10px 14px">
@@ -2415,7 +2414,7 @@ function parseChangeReport(ws){
   const g=a=>{ const c=ws[a]; return c==null? null : c.v; };
   const s=v=>v==null? "" : String(v).replace(/\s+/g," ").trim();
   const range=XLSX.utils.decode_range(ws["!ref"]);
-  const out={shipRaw:s(g("B3")), voyage:s(g("E3")), port:s(g("G3")), reportDate:toISO(g("K3")), rows:[], skipped:0};
+  const out={shipRaw:s(g("B3")), voyage:s(g("E3")), port:s(g("G3")), reportDate:toISO(g("K3")), rows:[], skipped:0, manual:[]};
   let section=null;
   for(let r=7;r<=range.e.r+1;r++){
     const a=s(g(`A${r}`));
@@ -2432,10 +2431,12 @@ function parseChangeReport(ws){
     if(section==="promo"){
       const from=impNormRank(g(`E${r}`)), to=impNormRank(g(`F${r}`));
       if(!to){ out.skipped++; continue; }
+      if(to.trainee){ out.manual.push(`${name}（提升為 A.${to.code}）`); continue; } // 見習(A.)不自動處理，請手動
       out.rows.push({type:"promo", name, rankRaw:s(g(`E${r}`)), code:to.code, trainee:to.trainee, fromCode:from&&from.code, date:toISO(g(`G${r}`))||out.reportDate, agent:""});
     }else{
       const rk=impNormRank(g(`E${r}`));
       if(!rk){ out.skipped++; continue; }
+      if(rk.trainee){ out.manual.push(`${name}（${IMP_SECTION_CN[section]} A.${rk.code}）`); continue; } // 見習(A.)不自動處理，請手動
       out.rows.push({type:section, name, rankRaw:s(g(`E${r}`)), code:rk.code, trainee:rk.trainee,
         date:toISO(g(`H${r}`))||toISO(g(`G${r}`))||out.reportDate, agent:s(g(`F${r}`)).replace(/[（(].*?[）)]/g,"").trim()});
     }
@@ -2452,7 +2453,7 @@ async function importChangeReportFile(file){
     const wb=XLSX.read(buf,{type:"array"});
     const ws=wb.Sheets[wb.SheetNames[0]];
     const rep=parseChangeReport(ws);
-    if(!rep.rows.length){ notify("這份異動單裡沒有找到高級船員（CAPT.~4/E）的異動","err"); return; }
+    if(!rep.rows.length){ notify("這份異動單裡沒有找到正式高級船員（CAPT.~4/E）的異動"+(rep.manual.length? "；見習(A.)人員請手動處理："+rep.manual.join("、"):""),"err"); return; }
     const ship=impMatchShip(rep.shipRaw);
     impState={rep, shipId: ship? ship.id : "", rows: rep.rows.map((r,i)=>{
       const person=[...State.persons.values()].find(p=>p.name===r.name)||null;
@@ -2546,7 +2547,8 @@ function renderImportModal(){
     </div>
     <label class="field" style="max-width:320px;margin-bottom:10px">對應系統船舶<select data-imp="ship">${shipOpts}</select></label>
     ${!ship? `<p class="hint" style="color:var(--bad)">找不到對應的船舶，請從上方選單選擇。</p>`:""}
-    <p class="hint" style="margin:0 0 8px">只列出高級船員的異動，${rep.skipped? `已略過 ${rep.skipped} 筆（部員／非高級船員）。`:""}日期已帶入報表上的「實際上/下船日」，可直接修改；取消勾選的項目不會執行。</p>
+    <p class="hint" style="margin:0 0 8px">只列出<b>正式</b>高級船員的異動，${rep.skipped? `已略過 ${rep.skipped} 筆（部員／非高級船員）。`:""}日期已帶入報表上的「實際上/下船日」，可直接修改；取消勾選的項目不會執行。</p>
+    ${rep.manual.length? `<div style="background:var(--yellow);border:1px solid #f3d3ab;border-left:4px solid var(--signal);border-radius:6px;padding:8px 12px;margin-bottom:8px;font-size:12.5px"><b style="color:var(--signal-d)">見習（A. 開頭）人員不在此處理，請手動操作：</b>${esc(rep.manual.join("、"))}</div>`:""}
     <div class="tblwrap" style="max-height:none"><table class="tbl"><thead><tr><th style="width:36px"></th><th style="width:100px">類型</th><th style="width:150px">姓名</th><th style="width:80px">報表職級</th><th>處理內容</th><th style="width:150px">生效日</th></tr></thead><tbody>${body}</tbody></table></div>
     <div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end">
       <button class="btn" onclick="closeImportModal()">取消</button>
@@ -2567,28 +2569,40 @@ document.addEventListener("change", e=>{
   }
   renderImportModal();
 });
+let impRunning=false;
+function impRelease(){ impRunning=false; document.querySelectorAll("#importReportHost button").forEach(b=>b.disabled=false); }
 async function runChangeImport(){
-  if(!impState) return;
-  const ship=impShip();
+  if(!impState || impRunning) return; // 防止連點「確認執行」造成重複寫入
   const act=impState.rows.filter(r=>r.include);
-  if(!ship){ notify("請先選擇對應的系統船舶","err"); return; }
+  if(!impShip()){ notify("請先選擇對應的系統船舶","err"); return; }
   if(!act.length){ notify("沒有勾選任何要執行的項目","err"); return; }
-  const bad=act.filter(r=>impRowIssue(r,ship));
-  if(bad.length){ notify(`還有 ${bad.length} 筆有問題（橘底列），請修正或取消勾選`,"err"); return; }
   if(act.some(r=>!r.date)){ notify("有項目缺少生效日","err"); return; }
-  /* 目標職位若已有人，必須是同一批裡被下船／晉升離開的人 */
-  const leaving=new Set(act.filter(r=>(r.type==="off"||r.type==="promo")&&r.person&&!r.trainee).map(r=>r.person.id));
-  const usedPosts=new Set();
-  for(const r of act.filter(r=>(r.type==="promo"||r.type==="on"||r.type==="new")&&!r.trainee)){
-    const po=ship.posts.find(p=>p.id===r.postId);
-    if(usedPosts.has(r.postId)){ notify(`職位「${po.post_label}」被選了兩次，請修正`,"err"); return; }
-    usedPosts.add(r.postId);
-    if(po.person_id && !leaving.has(po.person_id) && !(r.person && po.person_id===r.person.id)){
-      notify(`職位「${po.post_label}」目前還有人（${(State.persons.get(po.person_id)||{}).name||""}），請先讓他下船或調整職位`,"err"); return;
-    }
-  }
+  const bad0=act.filter(r=>impRowIssue(r,impShip()));
+  if(bad0.length){ notify(`還有 ${bad0.length} 筆有問題（橘底列），請修正或取消勾選`,"err"); return; }
   const operator=requireChangeAuth();
   if(!operator) return;
+  impRunning=true;
+  document.querySelectorAll("#importReportHost button").forEach(b=>b.disabled=true);
+  let ship;
+  try{
+    /* 先重新載入最新資料再驗證：避免畫面上的舊資料讓「已經寫入過」的上船者被重複寫入 */
+    await loadAll();
+    act.forEach(r=>{ if(r.person) r.person=State.persons.get(r.person.id)||r.person; });
+    ship=impShip();
+    const again=act.filter(r=>impRowIssue(r,ship));
+    if(again.length){ notify(`資料已更新，有 ${again.length} 筆需要重新確認（可能已經寫入過）：${again.map(r=>r.name).join("、")}`,"err"); renderImportModal(); impRelease(); return; }
+    /* 目標職位若已有人，必須是同一批裡被下船／晉升離開的人 */
+    const leaving=new Set(act.filter(r=>(r.type==="off"||r.type==="promo")&&r.person&&!r.trainee).map(r=>r.person.id));
+    const usedPosts=new Set();
+    for(const r of act.filter(r=>(r.type==="promo"||r.type==="on"||r.type==="new")&&!r.trainee)){
+      const po=ship.posts.find(p=>p.id===r.postId);
+      if(usedPosts.has(r.postId)){ notify(`職位「${po.post_label}」被選了兩次，請修正`,"err"); impRelease(); return; }
+      usedPosts.add(r.postId);
+      if(po.person_id && !leaving.has(po.person_id) && !(r.person && po.person_id===r.person.id)){
+        notify(`職位「${po.post_label}」目前還有人（${(State.persons.get(po.person_id)||{}).name||""}），請先讓他下船或調整職位`,"err"); impRelease(); return;
+      }
+    }
+  }catch(e){ impRelease(); notify("重新載入資料失敗："+e.message,"err"); return; }
   const sameShip=v=> normKey(v.ship_name)===normKey(ship.name) || (ship.name_en && normKey(v.ship_name)===normKey(ship.name_en));
   const log=[], warn=[];
   try{
@@ -2642,7 +2656,13 @@ async function runChangeImport(){
     document.getElementById("changeLog").insertAdjacentHTML("afterbegin", log.map(a=>`<li><span class="mono" style="font-size:11.5px">${new Date().toLocaleTimeString()}</span>　${esc(a)}</li>`).join(""));
     logAction("匯入異動單", `${operator}：${shipLabel(ship)} — ${log.join("／")}`);
     notify(`異動單已執行（${log.length} 筆）${warn.length? "；"+warn.join("；") : ""}`, warn.length?"err":"ok");
-  }catch(e){ notify("執行失敗（已執行的部分不會復原，請檢查後重新整理）："+e.message,"err"); }
+  }catch(e){
+    notify("執行失敗（已執行的部分不會復原，已重新載入最新資料，請檢查後再處理）："+e.message,"err");
+    try{ await loadAll(); renderMatrixTab(); renderImportModal(); }catch(_){}
+  }finally{
+    impRunning=false;
+    document.querySelectorAll("#importReportHost button").forEach(b=>b.disabled=false);
+  }
 }
 document.getElementById("btnImportReport").addEventListener("click", ()=>document.getElementById("importReportInput").click());
 document.getElementById("importReportInput").addEventListener("change", e=>{ const f=e.target.files[0]; e.target.value=""; if(f) importChangeReportFile(f); });
