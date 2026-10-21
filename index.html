@@ -414,10 +414,10 @@ table.matrix tr.yellow td{background:var(--yellow)}
       </div>
 
       <div id="matrixSubChange" hidden>
-        <div class="panelbox" style="margin-bottom:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <div class="panelbox" id="importDropzone" style="margin-bottom:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;border:2px dashed var(--line-2);transition:all .15s">
           <div>
             <b style="font-size:13.5px">📥 匯入異動回報單</b>
-            <div class="hint" style="margin-top:2px">收到船員組的「調(異)動聯繫(回報)單」Excel 時，直接拖進來／選檔：自動讀出下船、岸休上船、新進上船、提升，先預覽確認再一次寫入（只處理高級船員，部員自動略過）</div>
+            <div class="hint" style="margin-top:2px">收到船員組的「調(異)動聯繫(回報)單」Excel 時，<b>直接把檔案拖進這個框</b>，或按右邊按鈕選檔：自動讀出下船、岸休上船、新進上船、提升，先預覽確認再一次寫入（只處理正式高級船員，部員與見習 A. 人員不處理）</div>
           </div>
           <button class="btn sm primary" id="btnImportReport" style="margin-left:auto">📥 選擇異動單檔案</button>
           <input type="file" id="importReportInput" accept=".xls,.xlsx" style="display:none">
@@ -2666,6 +2666,20 @@ async function runChangeImport(){
 }
 document.getElementById("btnImportReport").addEventListener("click", ()=>document.getElementById("importReportInput").click());
 document.getElementById("importReportInput").addEventListener("change", e=>{ const f=e.target.files[0]; e.target.value=""; if(f) importChangeReportFile(f); });
+/* 拖放：把異動單 Excel 直接拖到這個框裡 */
+(function(){
+  const zone=document.getElementById("importDropzone");
+  const on=()=>{ zone.style.borderColor="var(--signal)"; zone.style.background="#fdf1e4"; };
+  const off=()=>{ zone.style.borderColor=""; zone.style.background=""; };
+  ["dragenter","dragover"].forEach(ev=>zone.addEventListener(ev, e=>{ e.preventDefault(); e.dataTransfer.dropEffect="copy"; on(); }));
+  zone.addEventListener("dragleave", e=>{ if(!zone.contains(e.relatedTarget)) off(); });
+  zone.addEventListener("drop", e=>{
+    e.preventDefault(); off();
+    const f=[...(e.dataTransfer.files||[])].find(x=>/\.(xls|xlsx|xlsm)$/i.test(x.name));
+    if(!f){ notify("請拖入 .xls / .xlsx 的異動單檔案","err"); return; }
+    importChangeReportFile(f);
+  });
+})();
 async function createShipManual(){
   const name=prompt("新船舶名稱：");
   if(!name) return;
