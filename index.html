@@ -549,6 +549,30 @@ table.matrix tr.yellow td{background:var(--yellow)}
       </div>
 
       <div class="panelbox" style="margin-bottom:16px">
+        <b style="font-size:15px">📥 匯入異動回報單（收到船員組異動單時最快的做法）</b>
+        <p class="hint" style="margin:8px 0 10px">路徑：<b>① Crew Matrix → ③ 船員異動</b> 最上方的「📥 匯入異動回報單」。收到船員組的「調(異)動聯繫(回報)單」Excel（.xls／.xlsx）時，不用再一筆一筆點職位：系統讀出報表，先給你預覽，確認後一次寫入。</p>
+        <ol style="margin:0 0 12px;padding-left:20px;font-size:13.5px;line-height:2">
+          <li>按「📥 選擇異動單檔案」，選取收到的異動回報單。</li>
+          <li>系統自動讀出船名、報表日期，以及四個區塊：<b>下船、岸休上船、新進上船、提升(調任)</b>。只處理<b>高級船員</b>（CAPT.、C/O、2/O、3/O、C/E、2/E、3/E、4/E，含 A. 見習）；PM、OS、COOK、OLR 等部員會自動略過。</li>
+          <li>跳出「異動單預覽」：確認上方「對應系統船舶」對得對（對不到時從選單選）；日期已帶入報表的<b>實際上/下船日</b>，可直接修改；不想執行的項目取消勾選。</li>
+          <li><b>上船的職位</b>預設挑空缺的職位，或同一批裡剛下船的那個職位，可用下拉選單改。目標職位如果還有人、又不是這批要離開的，系統會擋下來。</li>
+          <li><b>見習（A. 開頭，例如 A.4/E）</b>不佔正式職位：該筆航次備註自動寫「見習」，人員的「見習職務」欄寫成 A.4/E；航次職級預設用該員現職，不是高級船員職級時用 Cadet（不計職級年資），可在預覽裡改。</li>
+          <li><b>提升(調任)</b>區塊會用「原船晉升」的邏輯處理，上船日期沿用原本的；見習晉升則只更新見習職務。</li>
+          <li>按「✓ 確認執行（需異動密碼）」，輸入姓名與異動密碼後一次寫入，並留下操作紀錄。</li>
+        </ol>
+        <div style="background:var(--yellow);border:1px solid #f3d3ab;border-left:4px solid var(--signal);border-radius:8px;padding:10px 14px">
+          <b style="color:var(--signal-d);font-size:13px">注意事項</b>
+          <ul style="margin:6px 0 0;padding-left:20px;font-size:13px;line-height:1.9">
+            <li>姓名用「完全相同」比對，簡繁體或空格不同會被當成「資料庫查無此人」（橘色警示）。</li>
+            <li>查無此人的<b>上船者</b>可勾「建立新船員」（只建姓名與勞務公司，事後再補資料）；<b>下船者</b>查無此人則無法執行，請先確認系統內的姓名。</li>
+            <li>上船者如果個人檔還有「在船中」的航次（沒下船過），會標橘色警示、不能執行，請先處理他的下船。</li>
+            <li>執行中途網路中斷時，已寫入的部分不會自動復原，請重新整理後檢查結果。</li>
+            <li>「見習職務」欄位要先在資料庫新增 <code>rank_trainee</code> 才存得進去（見「上線前SQL」）。</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="panelbox" style="margin-bottom:16px">
         <b style="font-size:15px">③ Crew Matrix</b>
         <ol style="margin:10px 0 0;padding-left:20px;font-size:13.5px;line-height:2">
           <li>上方選單選船，下方表格會即時算出每個職位的 Crew Matrix 數字，跟原本紙本表格格式一致，黃色列是 SIRE 檢查會看的重點年資欄位。</li>
