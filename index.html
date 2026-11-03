@@ -390,6 +390,7 @@ table.matrix tr.yellow td{background:var(--yellow)}
         <button type="button" class="on" data-v="matrix">① 船舶 Crew Matrix</button>
         <button type="button" data-v="config">② 職位設定</button>
         <button type="button" data-v="change">③ 船員異動</button>
+        <button type="button" data-v="report">④ 異動回報單</button>
       </div>
 
       <div id="matrixSubMatrix">
@@ -413,7 +414,7 @@ table.matrix tr.yellow td{background:var(--yellow)}
         <div id="shipConfigHost"></div>
       </div>
 
-      <div id="matrixSubChange" hidden>
+      <div id="matrixSubReport" hidden>
         <div class="panelbox" id="importDropzone" style="margin-bottom:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;border:2px dashed var(--line-2);transition:all .15s">
           <div>
             <b style="font-size:13.5px">📥 匯入異動回報單</b>
@@ -422,6 +423,12 @@ table.matrix tr.yellow td{background:var(--yellow)}
           <button class="btn sm primary" id="btnImportReport" style="margin-left:auto">📥 選擇異動單檔案</button>
           <input type="file" id="importReportInput" accept=".xls,.xlsx" style="display:none">
         </div>
+        <div class="panelbox" id="reportLogHost" style="display:none">
+          <b style="font-size:13px">本次匯入紀錄</b>
+          <ul id="reportLog" style="margin:8px 0 0;padding-left:18px;font-size:13px;color:var(--ink-2)"></ul>
+        </div>
+      </div>
+      <div id="matrixSubChange" hidden>
         <p class="hint" style="margin:0 0 14px">點選職位可以複選，填好每個職位的異動內容後一次送出</p>
         <div class="postboard" id="postboard"></div>
         <div id="batchChangeHost"></div>
@@ -550,7 +557,7 @@ table.matrix tr.yellow td{background:var(--yellow)}
 
       <div class="panelbox" style="margin-bottom:16px">
         <b style="font-size:15px">📥 匯入異動回報單（收到船員組異動單時最快的做法）</b>
-        <p class="hint" style="margin:8px 0 10px">路徑：<b>① Crew Matrix → ③ 船員異動</b> 最上方的「📥 匯入異動回報單」。收到船員組的「調(異)動聯繫(回報)單」Excel（.xls／.xlsx）時，不用再一筆一筆點職位：系統讀出報表，先給你預覽，確認後一次寫入。</p>
+        <p class="hint" style="margin:8px 0 10px">路徑：<b>① Crew Matrix → ④ 異動回報單</b>（把異動單 Excel 直接拖進框內，或按「選擇異動單檔案」）。收到船員組的「調(異)動聯繫(回報)單」Excel（.xls／.xlsx）時，不用再一筆一筆點職位：系統讀出報表，先給你預覽，確認後一次寫入。</p>
         <ol style="margin:0 0 12px;padding-left:20px;font-size:13.5px;line-height:2">
           <li>按「📥 選擇異動單檔案」，選取收到的異動回報單。</li>
           <li>系統自動讀出船名、報表日期，以及四個區塊：<b>下船、岸休上船、新進上船、提升(調任)</b>。只處理<b>正式高級船員</b>（CAPT.、C/O、2/O、3/O、C/E、2/E、3/E、4/E）；PM、OS、COOK、OLR 等部員會自動略過；<b>見習（A. 開頭，例如 A.3/O、A.4/E）不自動處理</b>，預覽畫面上方會列出名單，請用原本的手動方式辦理。</li>
@@ -1391,6 +1398,7 @@ document.getElementById("matrixSubSeg").addEventListener("click", e=>{
   document.getElementById("matrixSubMatrix").hidden = btn.dataset.v!=="matrix";
   document.getElementById("matrixSubConfig").hidden = btn.dataset.v!=="config";
   document.getElementById("matrixSubChange").hidden = btn.dataset.v!=="change";
+  document.getElementById("matrixSubReport").hidden = btn.dataset.v!=="report";
   localStorage.setItem(UI_MATRIXSUB_KEY, btn.dataset.v);
 });
 document.getElementById("rosterSubSeg").addEventListener("click", e=>{
@@ -2652,8 +2660,9 @@ async function runChangeImport(){
     await loadAll();
     renderMatrixTab();
     closeImportModal();
-    const lh=document.getElementById("changeLogHost"); lh.style.display="";
-    document.getElementById("changeLog").insertAdjacentHTML("afterbegin", log.map(a=>`<li><span class="mono" style="font-size:11.5px">${new Date().toLocaleTimeString()}</span>　${esc(a)}</li>`).join(""));
+    const logHtml=log.map(a=>`<li><span class="mono" style="font-size:11.5px">${new Date().toLocaleTimeString()}</span>　${esc(a)}</li>`).join("");
+    document.getElementById("reportLogHost").style.display="";
+    document.getElementById("reportLog").insertAdjacentHTML("afterbegin", logHtml);
     logAction("匯入異動單", `${operator}：${shipLabel(ship)} — ${log.join("／")}`);
     notify(`異動單已執行（${log.length} 筆）${warn.length? "；"+warn.join("；") : ""}`, warn.length?"err":"ok");
   }catch(e){
