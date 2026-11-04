@@ -2446,7 +2446,8 @@ function parseChangeReport(ws){
   const g=a=>{ const c=ws[a]; return c==null? null : c.v; };
   const s=v=>v==null? "" : String(v).replace(/\s+/g," ").trim();
   const range=XLSX.utils.decode_range(ws["!ref"]);
-  const out={shipRaw:s(g("B3")), voyage:s(g("E3")), port:s(g("G3")), reportDate:toISO(g("K3")), rows:[], skipped:0, manual:[]};
+  const out={shipRaw:s(g("B3")), voyage:s(g("E3")), port:s(g("G3")), reportDate:toISO(g("K3")), rows:[], skipped:0, manual:[], promoBoard:[]};
+  const boardNames=new Set(); // 本次「岸休上船／新進上船」的人（提升區塊若又出現同一人＝上船提升，已隨上船處理）
   let section=null;
   for(let r=7;r<=range.e.r+1;r++){
     const a=s(g(`A${r}`));
@@ -2461,7 +2462,10 @@ function parseChangeReport(ws){
     const rawName=s(g(`D${r}`));
     if(!rawName || /^姓\s*名/.test(rawName)) continue;
     const nm=impSplitName(rawName), name=nm.zh||nm.en;
+    if(section==="on"||section==="new") boardNames.add(name);
     if(section==="promo"){
+      const remark=["H","I","J","K","L","M"].map(c=>s(g(`${c}${r}`))).join(" ");
+      if(/上船提升/.test(remark) || boardNames.has(name)){ out.promoBoard.push(name); continue; } // 上船提升：已用新職級上船，不另做原船晉升
       const from=impNormRank(g(`E${r}`)), to=impNormRank(g(`F${r}`));
       if(!to){ out.skipped++; continue; }
       if(to.trainee){ out.manual.push(`${name}（提升為 A.${to.code}）`); continue; } // 見習(A.)不自動處理，請手動
@@ -2469,7 +2473,6 @@ function parseChangeReport(ws){
     }else{
       const rk=impNormRank(g(`E${r}`));
       if(!rk){ out.skipped++; continue; }
-      if(rk.trainee){ out.manual.push(`${name}（${IMP_SECTION_CN[section]} A.${rk.code}）`); continue; } // 見習(A.)不自動處理，請手動
       out.rows.push({type:section, name, nameZh:nm.zh, nameEn:nm.en, rawName, rankRaw:s(g(`E${r}`)), code:rk.code, trainee:rk.trainee,
         date:toISO(g(`H${r}`))||toISO(g(`G${r}`))||out.reportDate, agent:s(g(`F${r}`)).replace(/[（(].*?[）)]/g,"").trim()});
     }
@@ -2504,6 +2507,14 @@ async function importChangeReportFile(file){
   }catch(e){ notify("讀取異動單失敗："+e.message,"err"); }
 }
 function impShip(){ return State.ships.find(s=>s.id===impState.shipId)||null; }
+/* 見習（A.）人員：這艘船的職位表有對應的見習職位欄（例如「A.3/O&AB」「A.4/E」）才一起處理，沒有就列出請手動 */
+const impNormLabel=s=>String(s||"").toUpperCase().replace(/[\s./．（）()]/g,""); // 連「/」也忽略，讓 A.3O、A.3/O、A3/O 都視為同一種寫法
+function impTraineePosts(r){
+  const ship=impShip(); if(!ship||!r.trainee) return [];
+  const key=impNormLabel("A"+r.code);
+  return ship.posts.filter(p=>impNormLabel(p.post_label).includes(key));
+}
+const impManual=r=> !!(r.trainee && !impTraineePosts(r).length);
 function impOnboardElsewhere(r){
   const ob=r.person && r.person.voyages.find(v=>!v.sign_off);
   return ob || null;
@@ -2512,19 +2523,19 @@ function impAssignDefaults(){
   const ship=impShip(); if(!ship) return;
   const rows=impState.rows;
   const vacated=new Set();
-  rows.filter(r=>(r.type==="off"||r.type==="promo") && r.person && !r.trainee).forEach(r=>{
+  rows.filter(r=>(r.type==="off"||r.type==="promo") && r.person && !impManual(r)).forEach(r=>{
     ship.posts.filter(p=>p.person_id===r.person.id).forEach(p=>vacated.add(p.id));
   });
   const taken=new Set();
-  rows.filter(r=>(r.type==="promo"||r.type==="on"||r.type==="new") && !r.trainee).forEach(r=>{
-    const cands=ship.posts.filter(p=>p.rank===r.code);
+  rows.filter(r=>(r.type==="promo"||r.type==="on"||r.type==="new") && !impManual(r)).forEach(r=>{
+    const cands=r.trainee? impTraineePosts(r) : ship.posts.filter(p=>p.rank===r.code);
     const pick=cands.find(p=>(!p.person_id||vacated.has(p.id)||(r.person&&p.person_id===r.person.id)) && !taken.has(p.id));
     r.postId = pick? pick.id : (cands[0]? cands[0].id : "");
     if(pick) taken.add(pick.id);
   });
 }
 function impRowIssue(r, ship){
-  if(!r.include) return "";
+  if(!r.include || impManual(r)) return "";
   const p=r.person;
   if(r.type==="off"){
     if(!p) return "資料庫查無此人";
@@ -2539,7 +2550,7 @@ function impRowIssue(r, ship){
     return "";
   }
   if(p){ const ob=impOnboardElsewhere(r); if(ob) return `目前仍在 ${ob.ship_name} 船上（尚未下船），請先處理其下船`; }
-  if(!r.trainee && (!ship || !r.postId)) return "請選擇上船職位";
+  if(!ship || !r.postId) return "請選擇上船職位";
   return "";
 }
 function renderImportModal(){
@@ -2547,20 +2558,22 @@ function renderImportModal(){
   if(!host){ host=document.createElement("div"); host.id="importReportHost";
     host.style.cssText="position:fixed;inset:0;background:rgba(17,28,40,.5);z-index:200;display:flex;justify-content:center;align-items:flex-start;padding:24px 14px;overflow:auto"; document.body.appendChild(host); }
   const ship=impShip(), rep=impState.rep;
-  const postOpts=(r)=> ship? ship.posts.filter(p=>p.rank===r.code).map(p=>{
+  const postOpts=(r)=> ship? (r.trainee? impTraineePosts(r) : ship.posts.filter(p=>p.rank===r.code)).map(p=>{
       const cur=p.person_id? ((State.persons.get(p.person_id)||{}).name||"") : "";
       return `<option value="${p.id}" ${r.postId===p.id?"selected":""}>${esc(p.post_label)}${cur? "（現任："+esc(cur)+"）":"（空缺）"}</option>`;
     }).join("") : "";
   const vrankOpts=(r)=>["Cadet",...IMP_OFFICER].map(x=>`<option value="${x}" ${r.vrank===x?"selected":""}>${x}${x==="Cadet"?"（不計職級年資）":""}</option>`).join("");
-  const body=impState.rows.map(r=>{
+  const manualRows=impState.rows.filter(impManual);
+  const manualList=[...rep.manual, ...manualRows.map(r=>`${r.name}（${IMP_SECTION_CN[r.type]} A.${r.code}）`)];
+  const body=impState.rows.filter(r=>!impManual(r)).map(r=>{
     const issue=impRowIssue(r,ship);
-    const assigned = (r.type==="off" && r.person && ship && !r.trainee)? ship.posts.filter(p=>p.person_id===r.person.id).map(p=>p.post_label).join("、") : "";
+    const assigned = (r.type==="off" && r.person && ship)? ship.posts.filter(p=>p.person_id===r.person.id).map(p=>p.post_label).join("、") : "";
     let act="";
     if(r.type==="off") act=`下船${assigned? `，解除職位 ${esc(assigned)}`:""}${r.trainee?"（見習）":""}`;
     else if(r.type==="promo") act = r.trainee
       ? `見習職務更新為 A.${esc(r.code)}（不換正式職位）`
       : `原船晉升 ${esc(r.fromCode||r.rankRaw)} → ${esc(r.code)}，職位：<select data-imp="post" data-i="${r.id}">${postOpts(r)}</select>`;
-    else if(r.trainee) act=`上船・見習 A.${esc(r.code)}（不佔正式職位），航次職級：<select data-imp="vrank" data-i="${r.id}">${vrankOpts(r)}</select>，備註自動寫「見習」`;
+    else if(r.trainee) act=`上船・見習 A.${esc(r.code)} → 職位：<select data-imp="post" data-i="${r.id}">${postOpts(r)}</select>，航次職級：<select data-imp="vrank" data-i="${r.id}">${vrankOpts(r)}</select>，備註自動寫「見習」`;
     else act=`上船 → 職位：<select data-imp="post" data-i="${r.id}">${postOpts(r)}</select>`;
     const create = (!r.person && (r.type==="on"||r.type==="new")) ? `<div><label style="font-size:12px"><input type="checkbox" data-imp="create" data-i="${r.id}" ${r.createNew?"checked":""}> 建立新船員「${esc(r.name)}」（${esc(r.agent||"勞務未填")}）</label></div>` : "";
     return `<tr style="${issue&&r.include?"background:#fdf1e4":""}">
@@ -2581,8 +2594,9 @@ function renderImportModal(){
     <label class="field" style="max-width:320px;margin-bottom:10px">對應系統船舶<select data-imp="ship">${shipOpts}</select></label>
     ${!ship? `<p class="hint" style="color:var(--bad)">找不到對應的船舶，請從上方選單選擇。</p>`:""}
     <p class="hint" style="margin:0 0 8px">只列出<b>正式</b>高級船員的異動，${rep.skipped? `已略過 ${rep.skipped} 筆（部員／非高級船員）。`:""}日期已帶入報表上的「實際上/下船日」，可直接修改；取消勾選的項目不會執行。</p>
-    ${rep.manual.length? `<div style="background:var(--yellow);border:1px solid #f3d3ab;border-left:4px solid var(--signal);border-radius:6px;padding:8px 12px;margin-bottom:8px;font-size:12.5px"><b style="color:var(--signal-d)">見習（A. 開頭）人員不在此處理，請手動操作：</b>${esc(rep.manual.join("、"))}</div>`:""}
-    <div class="tblwrap" style="max-height:none"><table class="tbl"><thead><tr><th style="width:36px"></th><th style="width:100px">類型</th><th style="width:150px">姓名</th><th style="width:80px">報表職級</th><th>處理內容</th><th style="width:150px">生效日</th></tr></thead><tbody>${body}</tbody></table></div>
+    ${rep.promoBoard.length? `<div style="background:#e3f1f3;border:1px solid #bfe0e5;border-left:4px solid #1e7f8c;border-radius:6px;padding:8px 12px;margin-bottom:8px;font-size:12.5px"><b style="color:#1e6b76">上船提升（已用新職級直接上船，不另外做提升）：</b>${esc(rep.promoBoard.join("、"))}</div>`:""}
+    ${manualList.length? `<div style="background:var(--yellow);border:1px solid #f3d3ab;border-left:4px solid var(--signal);border-radius:6px;padding:8px 12px;margin-bottom:8px;font-size:12.5px"><b style="color:var(--signal-d)">見習（A. 開頭）人員，這艘船的職位表沒有對應的見習職位欄，請手動操作：</b>${esc(manualList.join("、"))}<div class="hint" style="margin-top:3px">（若 Crew Matrix 有放見習職位欄，例如「A.3/O」，職位名稱含 A.3/O 的話會一起處理）</div></div>`:""}
+    <div class="tblwrap" style="max-height:none"><table class="tbl"><thead><tr><th style="width:36px"></th><th style="width:100px">類型</th><th style="width:150px">姓名</th><th style="width:80px">報表職級</th><th>處理內容</th><th style="width:150px">上/下船日</th></tr></thead><tbody>${body}</tbody></table></div>
     <div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end">
       <button class="btn" onclick="closeImportModal()">取消</button>
       <button class="btn primary" onclick="runChangeImport()">✓ 確認執行（需異動密碼）</button>
@@ -2606,7 +2620,7 @@ let impRunning=false;
 function impRelease(){ impRunning=false; document.querySelectorAll("#importReportHost button").forEach(b=>b.disabled=false); }
 async function runChangeImport(){
   if(!impState || impRunning) return; // 防止連點「確認執行」造成重複寫入
-  const act=impState.rows.filter(r=>r.include);
+  const act=impState.rows.filter(r=>r.include && !impManual(r));
   if(!impShip()){ notify("請先選擇對應的系統船舶","err"); return; }
   if(!act.length){ notify("沒有勾選任何要執行的項目","err"); return; }
   if(act.some(r=>!r.date)){ notify("有項目缺少生效日","err"); return; }
@@ -2625,9 +2639,9 @@ async function runChangeImport(){
     const again=act.filter(r=>impRowIssue(r,ship));
     if(again.length){ notify(`資料已更新，有 ${again.length} 筆需要重新確認（可能已經寫入過）：${again.map(r=>r.name).join("、")}`,"err"); renderImportModal(); impRelease(); return; }
     /* 目標職位若已有人，必須是同一批裡被下船／晉升離開的人 */
-    const leaving=new Set(act.filter(r=>(r.type==="off"||r.type==="promo")&&r.person&&!r.trainee).map(r=>r.person.id));
+    const leaving=new Set(act.filter(r=>(r.type==="off"||r.type==="promo")&&r.person).map(r=>r.person.id));
     const usedPosts=new Set();
-    for(const r of act.filter(r=>(r.type==="promo"||r.type==="on"||r.type==="new")&&!r.trainee)){
+    for(const r of act.filter(r=>(r.type==="promo"||r.type==="on"||r.type==="new"))){
       const po=ship.posts.find(p=>p.id===r.postId);
       if(usedPosts.has(r.postId)){ notify(`職位「${po.post_label}」被選了兩次，請修正`,"err"); impRelease(); return; }
       usedPosts.add(r.postId);
@@ -2644,7 +2658,7 @@ async function runChangeImport(){
       const ob=p.voyages.find(v=>!v.sign_off && sameShip(v)) || p.voyages.find(v=>!v.sign_off);
       if(ob) await sb("PATCH","crew_voyages",{query:`?id=eq.${ob.id}`, body:{sign_off:r.date}});
       else warn.push(`${p.name} 無在船中航次`);
-      if(!r.trainee) for(const po of ship.posts.filter(x=>x.person_id===p.id)) await sb("PATCH","crew_ship_posts",{query:`?id=eq.${po.id}`, body:{person_id:null}});
+      for(const po of ship.posts.filter(x=>x.person_id===p.id)) await sb("PATCH","crew_ship_posts",{query:`?id=eq.${po.id}`, body:{person_id:null}});
       log.push(`${p.name} 下船（${disp(r.date)}）`);
     }
     for(const r of act.filter(r=>r.type==="promo")){
@@ -2673,7 +2687,9 @@ async function runChangeImport(){
         await sb("POST","crew_voyages",{body:[{person_id:pid, rank:r.vrank||"Cadet", ship_name:ship.name, sign_on:r.date, sign_off:null, cargo_types:ship.cargo_types||[], note:"見習"}]});
         if("rank_trainee" in p) await sb("PATCH","crew_persons",{query:`?id=eq.${pid}`, body:{rank_trainee:"A."+r.code}});
         else warn.push(`${r.name} 見習職務未寫入（資料表尚未新增 rank_trainee 欄位）`);
-        log.push(`${r.name} 上船・見習 A.${r.code}（${disp(r.date)}）`);
+        if(r.postId) await sb("PATCH","crew_ship_posts",{query:`?id=eq.${r.postId}`, body:{person_id:pid}});
+        const tpo=ship.posts.find(x=>x.id===r.postId);
+        log.push(`${r.name} 上船・見習 A.${r.code}${tpo? " → "+tpo.post_label:""}（${disp(r.date)}）`);
       }else{
         const po=ship.posts.find(x=>x.id===r.postId);
         await sb("POST","crew_voyages",{body:[{person_id:pid, rank:po.rank, ship_name:ship.name, sign_on:r.date, sign_off:null, cargo_types:ship.cargo_types||[]}]});
