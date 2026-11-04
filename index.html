@@ -2027,8 +2027,16 @@ function rankFieldHtml(id, cur, trainee){
   const ranks=[...DECK,...ENG];
   let c=String(cur||"").trim();
   if(!trainee && c){ const n=RANK_ALIAS[c.toUpperCase()]; if(n && ranks.includes(n)) c=n; }
-  return selectWithOtherHtml(id, ranks.map(r=>[trainee?"A."+r:r, `${trainee?"A."+r:r} ${RANK_CN[r]||""}`]), c, trainee?"（無）":"（未填）");
+  return selectWithOtherHtml(id, ranks.map(r=>[trainee?"A."+r:r, `${trainee?"A."+r:r} ${RANK_CN[r]||""}${RANK_SIRE[r]?`（${RANK_SIRE[r]}）`:""}`]), c, trainee?"（無）":"（未填）");
 }
+/* SIRE (OCIMF) Rank 名稱對照：現職存的仍是系統職級代碼，選單上並列 SIRE 名稱方便對照 */
+const RANK_SIRE={"CAPT.":"Master","C/O":"Chief Mate","2/O":"2nd Officer","3/O":"3rd Officer","C/E":"Chief Engineer","2/E":"2nd Engineer","3/E":"3rd Engineer","4/E":"4th Engineer"};
+/* 證書種類（Certificate of Competency）：與 SIRE / OCIMF Crew Matrix 編輯畫面的選單一致 */
+/* Tanker 證書：與 SIRE / OCIMF 選單一致；舊資料的簡寫（如 Oil/Chem）自動對應成同義的選項 */
+const TANKER_OPTIONS=["Oil","Chemical","Gas","Oil and Gas","Oil and Chemical","Gas and Chemical","Oil, Chemical and Gas","None","N/A"];
+const TANKER_ALIAS={"OIL":"Oil","CHEM":"Chemical","CHEMICAL":"Chemical","GAS":"Gas","OIL/GAS":"Oil and Gas","OIL/CHEM":"Oil and Chemical","OIL AND CHEM":"Oil and Chemical","GAS/CHEM":"Gas and Chemical","OIL/CHEM/GAS":"Oil, Chemical and Gas","OIL,CHEM,GAS":"Oil, Chemical and Gas","NONE":"None","N/A":"N/A","NA":"N/A"};
+function normTanker(v){ const c=String(v||"").trim(); if(!c) return ""; const hit=TANKER_OPTIONS.find(o=>o.toLowerCase()===c.toLowerCase()); return hit || TANKER_ALIAS[c.toUpperCase().replace(/\s+/g," ")] || c; }
+const COC_OPTIONS=["Master II/2","Master II/3","Chief Mate II/2","OOW (Deck) II/1","OOW (Deck) II/3","Chief Eng III/2","Chief Eng III/3","Second Eng III/2","Second Eng III/3","OOW (Eng) III/1","Electro Technical Officer III/6","None","N/A","Offshore Crane Operator - Stage 1","Offshore Crane Operator - Stage 2","Offshore Crane Operator - Stage 3","Unknown"];
 const NATIONALITY_OPTIONS=[["Chinese","Chinese"],["Taiwanese","Taiwanese"]];
 const ISSUING_OPTIONS=[["CHINA","CHINA"],["Taiwan","Taiwan"]];
 /* ── 個人編輯視圖（整頁切換，不用彈出視窗）── */
@@ -2070,9 +2078,9 @@ function openPersonEdit(personId){
         <label class="field">見習職務（A.）${rankFieldHtml("pf-rank_trainee",p.rank_trainee,true)}</label>
         <label class="field">國籍${selectWithOtherHtml("pf-nationality",NATIONALITY_OPTIONS,p.nationality,"（未填）")}</label>
         <label class="field">進公司日<input type="date" id="pf-join_date" value="${p.join_date||""}"></label>
-        <label class="field">證書種類<input type="text" id="pf-coc" value="${esc(p.coc||"")}"></label>
+        <label class="field">證書種類（Certificate of Competency）${selectWithOtherHtml("pf-coc",COC_OPTIONS.map(x=>[x,x]),p.coc,"Please select...")}</label>
         <label class="field">發證國${selectWithOtherHtml("pf-issuing_country",ISSUING_OPTIONS,p.issuing_country,"（未填）")}</label>
-        <label class="field">Tanker cert<input type="text" id="pf-tanker_cert" value="${esc(p.tanker_cert||"")}"></label>
+        <label class="field">Tanker certification${selectWithOtherHtml("pf-tanker_cert",TANKER_OPTIONS.map(x=>[x,x]),normTanker(p.tanker_cert),"Please select...")}</label>
         <label class="field" style="grid-column:span 2">STCW V para 1 or 2 for current cargo<input type="text" id="pf-stcw" value="${esc(p.stcw||"Para 2")}"></label>
         <label class="field">電台證書<input type="text" id="pf-radio" value="${esc(p.radio||"")}"></label>
         <label class="field">英語能力<input type="text" id="pf-english" value="${esc(p.english||"")}"></label>
@@ -2195,7 +2203,7 @@ async function savePersonDrawer(personId){
   const person={
     name: val("pf-name"), name_en: val("pf-name_en"), rank_now: selectWithOtherValue("pf-rank_now"),
     nationality: selectWithOtherValue("pf-nationality"), join_date: val("pf-join_date")||null,
-    coc: val("pf-coc"), issuing_country: selectWithOtherValue("pf-issuing_country"), tanker_cert: val("pf-tanker_cert"),
+    coc: selectWithOtherValue("pf-coc"), issuing_country: selectWithOtherValue("pf-issuing_country"), tanker_cert: selectWithOtherValue("pf-tanker_cert"),
     stcw: val("pf-stcw"), radio: val("pf-radio"), english: val("pf-english"),
     manning_agency: val("pf-manning_agency"),
   };

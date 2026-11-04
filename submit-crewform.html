@@ -173,6 +173,7 @@ const FIELD_OPTIONS={
 const FIELD_OTHER="__other";
 const OTHER_FIELDS={"f-issuing":"f-issuing-other","f-nat":"f-nat-other","f-rank":"f-rank-other","f-trainee":"f-trainee-other"};
 const SYS_RANKS=["CAPT.","C/O","2/O","3/O","C/E","2/E","3/E","4/E"];
+const RANK_SIRE={"CAPT.":"Master","C/O":"Chief Mate","2/O":"2nd Officer","3/O":"3rd Officer","C/E":"Chief Engineer","2/E":"2nd Engineer","3/E":"3rd Engineer","4/E":"4th Engineer"}; // SIRE (OCIMF) Rank 名稱對照
 FIELD_OPTIONS["f-rank"]=SYS_RANKS;
 FIELD_OPTIONS["f-trainee"]=SYS_RANKS.map(r=>"A."+r);
 function onOtherChange(id){
@@ -198,7 +199,7 @@ for(const [id,opts] of Object.entries(FIELD_OPTIONS)){
 }
 document.getElementById("f-english").value="Good"; // 英語能力預設 Good
 /* 現職／見習職務：依系統年資職級；見習職務＝職級前加 A. */
-document.getElementById("f-rank").innerHTML=`<option value="">Please select...</option>`+SYS_RANKS.map(r=>`<option value="${r}">${r} ${RANK_CN[r]}</option>`).join("")+`<option value="${FIELD_OTHER}">其他（自填）</option>`;
+document.getElementById("f-rank").innerHTML=`<option value="">Please select...</option>`+SYS_RANKS.map(r=>`<option value="${r}">${r} ${RANK_CN[r]}${RANK_SIRE[r]?"（"+RANK_SIRE[r]+"）":""}</option>`).join("")+`<option value="${FIELD_OTHER}">其他（自填）</option>`;
 document.getElementById("f-trainee").innerHTML=`<option value="">（無）</option>`+SYS_RANKS.map(r=>`<option value="A.${r}">A.${r} 見習${RANK_CN[r]}</option>`).join("")+`<option value="${FIELD_OTHER}">其他（自填）</option>`;
 /* 無線電人員資格：證書種類為甲板高級船員＝預設 Yes，輪機＝預設 N/A；選了之後仍可自行調整 */
 let radioTouched=false;
