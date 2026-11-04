@@ -2426,6 +2426,22 @@ function impNormRank(raw){
   const code=IMP_RANK_EXTRA[t] || RANK_ALIAS[t] || (IMP_OFFICER.includes(t)? t : null);
   return (code && IMP_OFFICER.includes(code))? {code, trainee} : null;
 }
+/* 異動單的姓名常是「中文/英文」（例：楊子平/YANG,ZI-PING）：拆開後用中文名、英文名比對船員 */
+function impSplitName(raw){
+  const s=String(raw||"").trim(); const i=s.indexOf("/");
+  let zh=s, en="";
+  if(i>=0){ zh=s.slice(0,i).trim(); en=s.slice(i+1).trim(); }
+  if(!/[\u3400-\u9fff]/.test(zh)){ en=en||zh; zh=""; }
+  return {zh, en};
+}
+const impNormEn=s=>String(s||"").toUpperCase().replace(/[^A-Z]/g,"");
+function impFindPerson(r){
+  const all=[...State.persons.values()];
+  return (r.nameZh && all.find(p=>p.name===r.nameZh))
+      || all.find(p=>p.name===r.rawName)
+      || (r.nameEn && impNormEn(r.nameEn).length>3 && all.find(p=>impNormEn(p.name_en)===impNormEn(r.nameEn)))
+      || null;
+}
 function parseChangeReport(ws){
   const g=a=>{ const c=ws[a]; return c==null? null : c.v; };
   const s=v=>v==null? "" : String(v).replace(/\s+/g," ").trim();
@@ -2442,18 +2458,19 @@ function parseChangeReport(ws){
       else if(/下船|Sign-off/i.test(a)) section="off";
     }
     if(!section) continue;
-    const name=s(g(`D${r}`));
-    if(!name || /^姓\s*名/.test(name)) continue;
+    const rawName=s(g(`D${r}`));
+    if(!rawName || /^姓\s*名/.test(rawName)) continue;
+    const nm=impSplitName(rawName), name=nm.zh||nm.en;
     if(section==="promo"){
       const from=impNormRank(g(`E${r}`)), to=impNormRank(g(`F${r}`));
       if(!to){ out.skipped++; continue; }
       if(to.trainee){ out.manual.push(`${name}（提升為 A.${to.code}）`); continue; } // 見習(A.)不自動處理，請手動
-      out.rows.push({type:"promo", name, rankRaw:s(g(`E${r}`)), code:to.code, trainee:to.trainee, fromCode:from&&from.code, date:toISO(g(`G${r}`))||out.reportDate, agent:""});
+      out.rows.push({type:"promo", name, nameZh:nm.zh, nameEn:nm.en, rawName, rankRaw:s(g(`E${r}`)), code:to.code, trainee:to.trainee, fromCode:from&&from.code, date:toISO(g(`G${r}`))||out.reportDate, agent:""});
     }else{
       const rk=impNormRank(g(`E${r}`));
       if(!rk){ out.skipped++; continue; }
       if(rk.trainee){ out.manual.push(`${name}（${IMP_SECTION_CN[section]} A.${rk.code}）`); continue; } // 見習(A.)不自動處理，請手動
-      out.rows.push({type:section, name, rankRaw:s(g(`E${r}`)), code:rk.code, trainee:rk.trainee,
+      out.rows.push({type:section, name, nameZh:nm.zh, nameEn:nm.en, rawName, rankRaw:s(g(`E${r}`)), code:rk.code, trainee:rk.trainee,
         date:toISO(g(`H${r}`))||toISO(g(`G${r}`))||out.reportDate, agent:s(g(`F${r}`)).replace(/[（(].*?[）)]/g,"").trim()});
     }
   }
@@ -2472,7 +2489,7 @@ async function importChangeReportFile(file){
     if(!rep.rows.length){ notify("這份異動單裡沒有找到正式高級船員（CAPT.~4/E）的異動"+(rep.manual.length? "；見習(A.)人員請手動處理："+rep.manual.join("、"):""),"err"); return; }
     const ship=impMatchShip(rep.shipRaw);
     impState={rep, shipId: ship? ship.id : "", rows: rep.rows.map((r,i)=>{
-      const person=[...State.persons.values()].find(p=>p.name===r.name)||null;
+      const person=impFindPerson(r);
       return {...r, id:i, person, include:true, createNew:false, postId:"", vrank:""};
     })};
     impState.rows.forEach(r=>{
@@ -2649,7 +2666,7 @@ async function runChangeImport(){
     for(const r of act.filter(r=>r.type==="on"||r.type==="new")){
       let p=r.person, pid=p&&p.id;
       if(!p){
-        const created=await sb("POST","crew_persons",{body:{name:r.name, manning_agency:r.agent||"", rank_now: r.trainee? "" : r.code}});
+        const created=await sb("POST","crew_persons",{body:{name:r.name, name_en:r.nameEn||"", manning_agency:r.agent||"", rank_now: r.trainee? "" : r.code}});
         p=created[0]; pid=p.id; warn.push(`新建船員檔：${r.name}（請補齊個人資料與海上資歷）`);
       }
       if(r.trainee){
