@@ -2514,7 +2514,9 @@ function impTraineePosts(r){
   const key=impNormLabel("A"+r.code);
   return ship.posts.filter(p=>impNormLabel(p.post_label).includes(key));
 }
-const impManual=r=> !!(r.trainee && !impTraineePosts(r).length);
+/* 見習找不到對應職位欄時，不再丟給手動：預設「為這艘船新增職位欄 A.xx」（多出來的職位），可取消勾選 */
+const impManual=r=> false;
+const impNeedsNewPost=r=> !!(r.trainee && r.type!=="off" && r.type!=="promo" && !impTraineePosts(r).length);
 function impOnboardElsewhere(r){
   const ob=r.person && r.person.voyages.find(v=>!v.sign_off);
   return ob || null;
@@ -2532,6 +2534,7 @@ function impAssignDefaults(){
     const pick=cands.find(p=>(!p.person_id||vacated.has(p.id)||(r.person&&p.person_id===r.person.id)) && !taken.has(p.id));
     r.postId = pick? pick.id : (cands[0]? cands[0].id : "");
     if(pick) taken.add(pick.id);
+    if(impNeedsNewPost(r)) r.postId = r.newPost===false ? "" : "__new";
   });
 }
 function impRowIssue(r, ship){
@@ -2550,6 +2553,7 @@ function impRowIssue(r, ship){
     return "";
   }
   if(p){ const ob=impOnboardElsewhere(r); if(ob) return `目前仍在 ${ob.ship_name} 船上（尚未下船），請先處理其下船`; }
+  if(impNeedsNewPost(r) && !r.postId) return "請勾選「新增職位欄」，或取消勾選這一列改為手動處理";
   if(!ship || !r.postId) return "請選擇上船職位";
   return "";
 }
@@ -2573,6 +2577,7 @@ function renderImportModal(){
     else if(r.type==="promo") act = r.trainee
       ? `見習職務更新為 A.${esc(r.code)}（不換正式職位）`
       : `原船晉升 ${esc(r.fromCode||r.rankRaw)} → ${esc(r.code)}，職位：<select data-imp="post" data-i="${r.id}">${postOpts(r)}</select>`;
+    else if(r.trainee && impNeedsNewPost(r)) act=`上船・見習 A.${esc(r.code)}：這艘船沒有此見習職位欄，<label style="font-size:12px"><input type="checkbox" data-imp="newpost" data-i="${r.id}" ${r.postId==="__new"?"checked":""}> 新增職位欄「A.${esc(r.code)}」放進 Crew Matrix</label>，航次職級：<select data-imp="vrank" data-i="${r.id}">${vrankOpts(r)}</select>，備註自動寫「見習」`;
     else if(r.trainee) act=`上船・見習 A.${esc(r.code)} → 職位：<select data-imp="post" data-i="${r.id}">${postOpts(r)}</select>，航次職級：<select data-imp="vrank" data-i="${r.id}">${vrankOpts(r)}</select>，備註自動寫「見習」`;
     else act=`上船 → 職位：<select data-imp="post" data-i="${r.id}">${postOpts(r)}</select>`;
     const create = (!r.person && (r.type==="on"||r.type==="new")) ? `<div><label style="font-size:12px"><input type="checkbox" data-imp="create" data-i="${r.id}" ${r.createNew?"checked":""}> 建立新船員「${esc(r.name)}」（${esc(r.agent||"勞務未填")}）</label></div>` : "";
@@ -2611,6 +2616,7 @@ document.addEventListener("change", e=>{
     case "inc": row.include=t.checked; break;
     case "create": row.createNew=t.checked; break;
     case "post": row.postId=t.value; break;
+    case "newpost": row.newPost=t.checked; row.postId=t.checked?"__new":""; break;
     case "vrank": row.vrank=t.value; break;
     case "date": row.date=t.value||null; break;
   }
@@ -2642,6 +2648,7 @@ async function runChangeImport(){
     const leaving=new Set(act.filter(r=>(r.type==="off"||r.type==="promo")&&r.person).map(r=>r.person.id));
     const usedPosts=new Set();
     for(const r of act.filter(r=>(r.type==="promo"||r.type==="on"||r.type==="new"))){
+      if(r.postId==="__new") continue;
       const po=ship.posts.find(p=>p.id===r.postId);
       if(usedPosts.has(r.postId)){ notify(`職位「${po.post_label}」被選了兩次，請修正`,"err"); impRelease(); return; }
       usedPosts.add(r.postId);
@@ -2684,6 +2691,10 @@ async function runChangeImport(){
         p=created[0]; pid=p.id; warn.push(`新建船員檔：${r.name}（請補齊個人資料與海上資歷）`);
       }
       if(r.trainee){
+        if(r.postId==="__new"){
+          const cp=await sb("POST","crew_ship_posts",{body:[{ship_id:ship.id, post_label:"A."+r.code, rank:r.code, sort_order:ship.posts.length+1}]});
+          r.postId=cp[0].id; ship.posts.push(cp[0]); log.push(`新增職位欄「A.${r.code}」`);
+        }
         await sb("POST","crew_voyages",{body:[{person_id:pid, rank:r.vrank||"Cadet", ship_name:ship.name, sign_on:r.date, sign_off:null, cargo_types:ship.cargo_types||[], note:"見習"}]});
         if("rank_trainee" in p) await sb("PATCH","crew_persons",{query:`?id=eq.${pid}`, body:{rank_trainee:"A."+r.code}});
         else warn.push(`${r.name} 見習職務未寫入（資料表尚未新增 rank_trainee 欄位）`);
