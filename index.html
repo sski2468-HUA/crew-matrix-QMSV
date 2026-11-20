@@ -2534,7 +2534,10 @@ function impAssignDefaults(){
     const pick=cands.find(p=>(!p.person_id||vacated.has(p.id)||(r.person&&p.person_id===r.person.id)) && !taken.has(p.id));
     r.postId = pick? pick.id : (cands[0]? cands[0].id : "");
     if(pick) taken.add(pick.id);
-    if(impNeedsNewPost(r)) r.postId = r.newPost===false ? "" : "__new";
+    if(impNeedsNewPost(r)){
+      const formal=ship.posts.filter(p=>p.rank===r.code && (!p.person_id||vacated.has(p.id)) && !taken.has(p.id));
+      if(formal.length){ r.postId=formal[0].id; taken.add(formal[0].id); } else r.postId="__new";
+    }
   });
 }
 function impRowIssue(r, ship){
@@ -2562,10 +2565,14 @@ function renderImportModal(){
   if(!host){ host=document.createElement("div"); host.id="importReportHost";
     host.style.cssText="position:fixed;inset:0;background:rgba(17,28,40,.5);z-index:200;display:flex;justify-content:center;align-items:flex-start;padding:24px 14px;overflow:auto"; document.body.appendChild(host); }
   const ship=impShip(), rep=impState.rep;
-  const postOpts=(r)=> ship? (r.trainee? impTraineePosts(r) : ship.posts.filter(p=>p.rank===r.code)).map(p=>{
+  const postOpts=(r)=>{ if(!ship) return "";
+    const tp=r.trainee? impTraineePosts(r) : [];
+    const list=r.trainee? [...tp, ...ship.posts.filter(p=>p.rank===r.code && !tp.includes(p))] : ship.posts.filter(p=>p.rank===r.code);
+    const newOpt=(r.trainee && !tp.length)? `<option value="__new" ${r.postId==="__new"?"selected":""}>新增職位欄「A.${esc(r.code)}」放進 Crew Matrix（多出來的職位）</option>` : "";
+    return newOpt + list.map(p=>{
       const cur=p.person_id? ((State.persons.get(p.person_id)||{}).name||"") : "";
-      return `<option value="${p.id}" ${r.postId===p.id?"selected":""}>${esc(p.post_label)}${cur? "（現任："+esc(cur)+"）":"（空缺）"}</option>`;
-    }).join("") : "";
+      return `<option value="${p.id}" ${r.postId===p.id?"selected":""}>${esc(p.post_label)}${(r.trainee && !tp.includes(p))? "（正式職位・代理）":""}${cur? "（現任："+esc(cur)+"）":"（空缺）"}</option>`;
+    }).join("") + (r.type==="promo"? "" : `<option value="__none" ${r.postId==="__none"?"selected":""}>隨船（不佔職位、不取代任何人，只新增資歷）</option>`); };
   const vrankOpts=(r)=>["Cadet",...IMP_OFFICER].map(x=>`<option value="${x}" ${r.vrank===x?"selected":""}>${x}${x==="Cadet"?"（不計職級年資）":""}</option>`).join("");
   const manualRows=impState.rows.filter(impManual);
   const manualList=[...rep.manual, ...manualRows.map(r=>`${r.name}（${IMP_SECTION_CN[r.type]} A.${r.code}）`)];
@@ -2577,7 +2584,6 @@ function renderImportModal(){
     else if(r.type==="promo") act = r.trainee
       ? `見習職務更新為 A.${esc(r.code)}（不換正式職位）`
       : `原船晉升 ${esc(r.fromCode||r.rankRaw)} → ${esc(r.code)}，職位：<select data-imp="post" data-i="${r.id}">${postOpts(r)}</select>`;
-    else if(r.trainee && impNeedsNewPost(r)) act=`上船・見習 A.${esc(r.code)}：這艘船沒有此見習職位欄，<label style="font-size:12px"><input type="checkbox" data-imp="newpost" data-i="${r.id}" ${r.postId==="__new"?"checked":""}> 新增職位欄「A.${esc(r.code)}」放進 Crew Matrix</label>，航次職級：<select data-imp="vrank" data-i="${r.id}">${vrankOpts(r)}</select>，備註自動寫「見習」`;
     else if(r.trainee) act=`上船・見習 A.${esc(r.code)} → 職位：<select data-imp="post" data-i="${r.id}">${postOpts(r)}</select>，航次職級：<select data-imp="vrank" data-i="${r.id}">${vrankOpts(r)}</select>，備註自動寫「見習」`;
     else act=`上船 → 職位：<select data-imp="post" data-i="${r.id}">${postOpts(r)}</select>`;
     const create = (!r.person && (r.type==="on"||r.type==="new")) ? `<div><label style="font-size:12px"><input type="checkbox" data-imp="create" data-i="${r.id}" ${r.createNew?"checked":""}> 建立新船員「${esc(r.name)}」（${esc(r.agent||"勞務未填")}）</label></div>` : "";
@@ -2648,7 +2654,7 @@ async function runChangeImport(){
     const leaving=new Set(act.filter(r=>(r.type==="off"||r.type==="promo")&&r.person).map(r=>r.person.id));
     const usedPosts=new Set();
     for(const r of act.filter(r=>(r.type==="promo"||r.type==="on"||r.type==="new"))){
-      if(r.postId==="__new") continue;
+      if(r.postId==="__new" || r.postId==="__none") continue;
       const po=ship.posts.find(p=>p.id===r.postId);
       if(usedPosts.has(r.postId)){ notify(`職位「${po.post_label}」被選了兩次，請修正`,"err"); impRelease(); return; }
       usedPosts.add(r.postId);
@@ -2695,13 +2701,20 @@ async function runChangeImport(){
           const cp=await sb("POST","crew_ship_posts",{body:[{ship_id:ship.id, post_label:"A."+r.code, rank:r.code, sort_order:ship.posts.length+1}]});
           r.postId=cp[0].id; ship.posts.push(cp[0]); log.push(`新增職位欄「A.${r.code}」`);
         }
-        await sb("POST","crew_voyages",{body:[{person_id:pid, rank:r.vrank||"Cadet", ship_name:ship.name, sign_on:r.date, sign_off:null, cargo_types:ship.cargo_types||[], note:"見習"}]});
+        const formalPo=ship.posts.find(x=>x.id===r.postId && !impTraineePosts(r).includes(x));
+        await sb("POST","crew_voyages",{body:[{person_id:pid, rank:formalPo? formalPo.rank : (r.vrank||"Cadet"), ship_name:ship.name, sign_on:r.date, sign_off:null, cargo_types:ship.cargo_types||[], note:"見習"}]});
         if("rank_trainee" in p) await sb("PATCH","crew_persons",{query:`?id=eq.${pid}`, body:{rank_trainee:"A."+r.code}});
         else warn.push(`${r.name} 見習職務未寫入（資料表尚未新增 rank_trainee 欄位）`);
-        if(r.postId) await sb("PATCH","crew_ship_posts",{query:`?id=eq.${r.postId}`, body:{person_id:pid}});
+        if(r.postId && r.postId!=="__none") await sb("PATCH","crew_ship_posts",{query:`?id=eq.${r.postId}`, body:{person_id:pid}});
         const tpo=ship.posts.find(x=>x.id===r.postId);
-        log.push(`${r.name} 上船・見習 A.${r.code}${tpo? " → "+tpo.post_label:""}（${disp(r.date)}）`);
+        log.push(`${r.name} 上船・見習 A.${r.code}${tpo? " → "+tpo.post_label:(r.postId==="__none"?"（隨船，不佔職位）":"")}（${disp(r.date)}）`);
       }else{
+        if(r.postId==="__none"){
+          await sb("POST","crew_voyages",{body:[{person_id:pid, rank:r.code, ship_name:ship.name, sign_on:r.date, sign_off:null, cargo_types:ship.cargo_types||[], note:"隨船"}]});
+          await sb("PATCH","crew_persons",{query:`?id=eq.${pid}`, body:{rank_now:r.code}});
+          log.push(`${r.name} 隨船上船（${r.code}，不佔職位，${disp(r.date)}）`);
+          continue;
+        }
         const po=ship.posts.find(x=>x.id===r.postId);
         await sb("POST","crew_voyages",{body:[{person_id:pid, rank:po.rank, ship_name:ship.name, sign_on:r.date, sign_off:null, cargo_types:ship.cargo_types||[]}]});
         await sb("PATCH","crew_persons",{query:`?id=eq.${pid}`, body:{rank_now:po.rank}});
