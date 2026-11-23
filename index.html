@@ -2082,7 +2082,7 @@ function openPersonEdit(personId){
         <label class="field">發證國${selectWithOtherHtml("pf-issuing_country",ISSUING_OPTIONS,p.issuing_country,"（未填）")}</label>
         <label class="field">Tanker certification${selectWithOtherHtml("pf-tanker_cert",TANKER_OPTIONS.map(x=>[x,x]),normTanker(p.tanker_cert),"Please select...")}</label>
         <label class="field" style="grid-column:span 2">STCW V para 1 or 2 for current cargo<input type="text" id="pf-stcw" value="${esc(p.stcw||"Para 2")}"></label>
-        <label class="field">電台證書<input type="text" id="pf-radio" value="${esc(p.radio||"")}"></label>
+        <label class="field">電台證書（Radio qualification）${selectWithOtherHtml("pf-radio",[["GOC","GOC"],["NIL","NIL"]],p.radio,"Please select...")}</label>
         <label class="field">英語能力<input type="text" id="pf-english" value="${esc(p.english||"")}"></label>
       </div>
 
@@ -2204,7 +2204,7 @@ async function savePersonDrawer(personId){
     name: val("pf-name"), name_en: val("pf-name_en"), rank_now: selectWithOtherValue("pf-rank_now"),
     nationality: selectWithOtherValue("pf-nationality"), join_date: val("pf-join_date")||null,
     coc: selectWithOtherValue("pf-coc"), issuing_country: selectWithOtherValue("pf-issuing_country"), tanker_cert: selectWithOtherValue("pf-tanker_cert"),
-    stcw: val("pf-stcw"), radio: val("pf-radio"), english: val("pf-english"),
+    stcw: val("pf-stcw"), radio: selectWithOtherValue("pf-radio"), english: val("pf-english"),
     manning_agency: val("pf-manning_agency"),
   };
   { const cur=State.persons.get(personId), tv=selectWithOtherValue("pf-rank_trainee");

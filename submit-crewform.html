@@ -101,7 +101,8 @@ table.vt td.days{font-family:Consolas,Menlo,monospace;text-align:center;padding-
           <input type="text" id="f-issuing-other" style="display:none;margin-top:5px" placeholder="請自行填寫發證國"></label>
         <label>Tanker 證書<select id="f-tanker"></select></label>
         <label style="grid-column:span 2">STCW V para 1 or 2 for current cargo<input type="text" id="f-stcw" value="Para 2" placeholder="例：Para 2"></label>
-        <label>無線電人員資格 (Radio qualification)<select id="f-radio"></select></label>
+        <label>電台證書 (Radio qualification)<select id="f-radio"></select>
+          <input type="text" id="f-radio-other" style="display:none;margin-top:5px" placeholder="請自行填寫電台證書"></label>
         <label>英語能力<select id="f-english"></select></label>
       </div>
     </div>
@@ -164,14 +165,14 @@ const RANK_CN={"CAPT.":"船長","C/O":"大副","2/O":"二副","3/O":"三副","C/
 const FIELD_OPTIONS={
   "f-coc":["Master II/2","Master II/3","Chief Mate II/2","OOW (Deck) II/1","OOW (Deck) II/3","Chief Eng III/2","Chief Eng III/3","Second Eng III/2","Second Eng III/3","OOW (Eng) III/1","Electro Technical Officer III/6","None","N/A","Offshore Crane Operator - Stage 1","Offshore Crane Operator - Stage 2","Offshore Crane Operator - Stage 3","Unknown"],
   "f-issuing":["CHINA","Taiwan"],
-  "f-radio":["Yes","No","N/A"],
+  "f-radio":["GOC","NIL"],
   "f-nat":["Chinese","Taiwanese"],
   "f-tanker":["Oil","Chemical","Gas","Oil and Gas","Oil and Chemical","Gas and Chemical","Oil, Chemical and Gas","None","N/A"],
   "f-english":["Good","Fair","Poor"],
 };
 /* 有「其他（自填）」選項的欄位：發證國、國籍 */
 const FIELD_OTHER="__other";
-const OTHER_FIELDS={"f-issuing":"f-issuing-other","f-nat":"f-nat-other","f-rank":"f-rank-other","f-trainee":"f-trainee-other"};
+const OTHER_FIELDS={"f-issuing":"f-issuing-other","f-nat":"f-nat-other","f-rank":"f-rank-other","f-trainee":"f-trainee-other","f-radio":"f-radio-other"};
 const SYS_RANKS=["CAPT.","C/O","2/O","3/O","C/E","2/E","3/E","4/E"];
 const RANK_SIRE={"CAPT.":"Master","C/O":"Chief Mate","2/O":"2nd Officer","3/O":"3rd Officer","C/E":"Chief Engineer","2/E":"2nd Engineer","3/E":"3rd Engineer","4/E":"4th Engineer"}; // SIRE (OCIMF) Rank 名稱對照
 FIELD_OPTIONS["f-rank"]=SYS_RANKS;
@@ -207,8 +208,8 @@ document.getElementById("f-radio").addEventListener("change", e=>{ if(e.isTruste
 document.getElementById("f-coc").addEventListener("change", e=>{
   if(radioTouched) return;
   const v=e.target.value;
-  if(/^(Master|Chief Mate|OOW \(Deck\))/.test(v)) document.getElementById("f-radio").value="Yes";
-  else if(/^(Chief Eng|Second Eng|OOW \(Eng\))/.test(v)) document.getElementById("f-radio").value="N/A";
+  if(/^(Master|Chief Mate|OOW \(Deck\))/.test(v)) document.getElementById("f-radio").value="GOC";
+  else if(/^(Chief Eng|Second Eng|OOW \(Eng\))/.test(v)) document.getElementById("f-radio").value="NIL";
 });
 
 let voyCount=0;
@@ -316,7 +317,7 @@ function collectFormData(){
     name: val("f-name"), name_en: val("f-name_en"), manning_agency: val("f-manning"),
     rank_now: fieldValue("f-rank"), nationality: fieldValue("f-nat"), join_date: val("f-join")||null,
     coc: val("f-coc"), issuing_country: fieldValue("f-issuing"), tanker_cert: val("f-tanker"),
-    stcw: val("f-stcw"), radio: val("f-radio"), english: val("f-english"),
+    stcw: val("f-stcw"), radio: fieldValue("f-radio"), english: val("f-english"),
   };
   if(fieldValue("f-trainee")) person.rank_trainee=fieldValue("f-trainee"); // 沒填就不送出這個欄位
   const voyages=[];
@@ -340,7 +341,7 @@ function escHtml(s){ return String(s??"").replace(/[&<>"']/g, c=> ({"&":"&amp;",
 function renderConfirmBody(person, voyages){
   const fields=[["姓名",person.name],["英文姓名",person.name_en],["勞務公司",person.manning_agency],["現職",person.rank_now],["見習職務",person.rank_trainee],
     ["國籍",person.nationality],["進公司日",person.join_date],["證書種類",person.coc],["發證國",person.issuing_country],
-    ["Tanker 證書",person.tanker_cert],["STCW V",person.stcw],["無線電人員資格",person.radio],["英語能力",person.english]];
+    ["Tanker 證書",person.tanker_cert],["STCW V",person.stcw],["電台證書",person.radio],["英語能力",person.english]];
   const fieldsHtml = fields.map(([k,v])=>`<div><b>${escHtml(k)}</b>${escHtml(v||"（未填）")}</div>`).join("");
   const fmt=s=> s? String(s).replaceAll("-","/") : "";
   const voyHtml = voyages.length
