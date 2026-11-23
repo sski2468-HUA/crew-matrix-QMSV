@@ -418,7 +418,7 @@ table.matrix tr.yellow td{background:var(--yellow)}
         <div class="panelbox" id="importDropzone" style="margin-bottom:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;border:2px dashed var(--line-2);transition:all .15s">
           <div>
             <b style="font-size:13.5px">📥 匯入異動回報單</b>
-            <div class="hint" style="margin-top:2px">收到船員組的「調(異)動聯繫(回報)單」Excel 時，<b>直接把檔案拖進這個框</b>，或按右邊按鈕選檔：自動讀出下船、岸休上船、新進上船、提升，先預覽確認再一次寫入（只處理正式高級船員，部員與見習 A. 人員不處理）</div>
+            <div class="hint" style="margin-top:2px">收到船員組的「調(異)動聯繫(回報)單」Excel 時，<b>直接把檔案拖進這個框</b>，或按右邊按鈕選檔：自動讀出下船、岸休上船、新進上船、提升，先預覽確認再一次寫入（只處理高級船員，含見習；部員自動略過）</div>
           </div>
           <button class="btn sm primary" id="btnImportReport" style="margin-left:auto">📥 選擇異動單檔案</button>
           <input type="file" id="importReportInput" accept=".xls,.xlsx" style="display:none">
@@ -560,7 +560,7 @@ table.matrix tr.yellow td{background:var(--yellow)}
         <p class="hint" style="margin:8px 0 10px">路徑：<b>① Crew Matrix → ④ 異動回報單</b>（把異動單 Excel 直接拖進框內，或按「選擇異動單檔案」）。收到船員組的「調(異)動聯繫(回報)單」Excel（.xls／.xlsx）時，不用再一筆一筆點職位：系統讀出報表，先給你預覽，確認後一次寫入。</p>
         <ol style="margin:0 0 12px;padding-left:20px;font-size:13.5px;line-height:2">
           <li>按「📥 選擇異動單檔案」，選取收到的異動回報單。</li>
-          <li>系統自動讀出船名、報表日期，以及四個區塊：<b>下船、岸休上船、新進上船、提升(調任)</b>。只處理<b>正式高級船員</b>（CAPT.、C/O、2/O、3/O、C/E、2/E、3/E、4/E）；PM、OS、COOK、OLR 等部員會自動略過；<b>見習（A. 開頭，例如 A.3/O、A.4/E）不自動處理</b>，預覽畫面上方會列出名單，請用原本的手動方式辦理。</li>
+          <li>系統自動讀出船名、報表日期，以及四個區塊：<b>下船、岸休上船、新進上船、提升(調任)</b>。處理高級船員（CAPT.、C/O、2/O、3/O、C/E、2/E、3/E、4/E）<b>含見習</b>（A. 開頭或寫「見習船長」等）；PM、OS、COOK、OLR 等部員會自動略過。見習人員上船時，預覽的「職位」下拉可選：<b>新增一個 A.xx 職位欄</b>（純見習、專職見習）、<b>代理某個正式職位</b>（例如 A.2/E 代 2/E），或<b>隨船（不佔職位）</b>。</li>
           <li>跳出「異動單預覽」：確認上方「對應系統船舶」對得對（對不到時從選單選）；日期已帶入報表的<b>實際上/下船日</b>，可直接修改；不想執行的項目取消勾選。</li>
           <li><b>上船的職位</b>預設挑空缺的職位，或同一批裡剛下船的那個職位，可用下拉選單改。目標職位如果還有人、又不是這批要離開的，系統會擋下來。</li>
           <li><b>提升(調任)</b>區塊（正式職位）會用「原船晉升」的邏輯處理，上船日期沿用原本的。</li>
@@ -2422,7 +2422,8 @@ let impState=null;
 function impNormRank(raw){
   let t=String(raw||"").replace(/\s+/g,"").toUpperCase();
   if(!t) return null;
-  const trainee=/^A\./.test(t); if(trainee) t=t.slice(2);
+  let trainee=/^A\./.test(t); if(trainee) t=t.slice(2);
+  if(/^(見習|实习|實習)(?!生)/.test(t)){ trainee=true; t=t.replace(/^(見習|实习|實習)/,""); } // 「見習船長」「見習大副」…中文寫法
   const code=IMP_RANK_EXTRA[t] || RANK_ALIAS[t] || (IMP_OFFICER.includes(t)? t : null);
   return (code && IMP_OFFICER.includes(code))? {code, trainee} : null;
 }
